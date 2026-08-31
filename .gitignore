@@ -64,4 +64,4 @@ Thumbs.db
 *.swp
 
 # Notas locales (no versionar)
-docs/setup-linux.md
+docs/private/
