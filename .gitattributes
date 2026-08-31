@@ -1,0 +1,38 @@
+# Normaliza los finales de línea: en el repositorio SIEMPRE se guardan con LF.
+# Así el historial es idéntico en Windows, Linux y macOS y desaparecen los
+# avisos "LF will be replaced by CRLF".
+* text=auto eol=lf
+
+# Fuentes y ficheros de proyecto embebido -> LF
+*.c      text eol=lf
+*.h      text eol=lf
+*.cpp    text eol=lf
+*.hpp    text eol=lf
+*.s      text eol=lf
+*.S      text eol=lf
+*.ld     text eol=lf
+*.ioc    text eol=lf
+*.mk     text eol=lf
+Makefile text eol=lf
+*.md     text eol=lf
+*.txt    text eol=lf
+*.json   text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.sh     text eol=lf
+
+# Ficheros específicos de Windows -> CRLF
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+
+# Binarios: que Git no toque los finales de línea
+*.bin    binary
+*.elf    binary
+*.hex    binary
+*.a      binary
+*.o      binary
+*.pdf    binary
+*.png    binary
+*.jpg    binary
+*.gif    binary
+*.ico    binary
