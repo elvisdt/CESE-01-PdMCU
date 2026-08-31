@@ -1,7 +1,7 @@
 # CESE-01-PdMCU
 
 Prácticas y proyectos del curso **Programación de Microprocesadores** (PdM) — CESE, FIUBA.
-En la práctica se programa la familia **STM32** (microcontroladores) con **STM32CubeIDE**.
+**STM32** (microcontroladores)
 
 ## Autor
 
