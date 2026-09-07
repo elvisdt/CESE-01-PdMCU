@@ -1,0 +1,30 @@
+Practica 2 - Para pensa
+1) Se pueden cambiar los tiempos en un solo lugar, o estan hardcodeados?
+
+- Para el Punto 2, NO: el valor 100 (ms) esta hardcodeado directo al icilizar el delayInit 
+
+- Para el Punto 3, SI: los tiempos y repeticiones se  prubec cambiar en un solo lgar,
+ en la cual pimerose creo una estructura y arreglo blink_steps[], que optimice el proceso 
+
+
+
+2) Que bibliotecas estandar se debieron agregar para que compile?
+
+stdint.h (para uint32_t, uint8_t) y stdbool.h (para bool).  blibliotecas standar de C
+
+
+3) Es adecuado el control de los parametros pasados por el usuario?
+
+No, ninguna funcion valida sus parametros (punteros NULL, duration = 0, total_steps = 0).
+
+
+4) Cuan reutilizable es el codigo implementado?
+
+- delayInit/delayRead/delayWrite: reutilizable, reciben delay_t por puntero, no usan variables globales.
+
+- Logica del patron (Punto 3): poco reutilizable, esta escrita directo en el while(1) con variables globales fijas, ahi se podria pasar a funciaones y mejrar la integracion
+
+
+5) Cuan sencillo resulta cambiar el patron de tiempos de parpadeo?
+
+Al estar en un arreglko y como varaibel global se prodria editar el arreglo blink_steps[], sin manipular la logica
