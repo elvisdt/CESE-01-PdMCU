@@ -13,7 +13,7 @@
 static UART_HandleTypeDef UartHandle;
 
 bool_t uartInit(){
-	UartHandle.Instance = USART1;
+	UartHandle.Instance = USART2;
 	UartHandle.Init.BaudRate = 115200;
 	UartHandle.Init.WordLength = UART_WORDLENGTH_8B;
 	UartHandle.Init.StopBits = UART_STOPBITS_1;

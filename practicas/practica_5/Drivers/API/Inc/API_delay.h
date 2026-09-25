@@ -17,8 +17,7 @@ extern "C" {
 #include <stdbool.h>
 
 
-typedef uint32_t tick_t;	// use stdint.h
-typedef bool bool_t;		// use stdbool.h
+#include "API_common.h"
 
 typedef struct{
 	tick_t startTime;
