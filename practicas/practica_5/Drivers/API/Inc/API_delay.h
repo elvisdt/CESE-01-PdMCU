@@ -57,7 +57,6 @@ bool_t delayIsRunning(delay_t * delay);
 
 
 
-void Error_APIdelay_Handler(void);
 
 
 #ifdef __cplusplus

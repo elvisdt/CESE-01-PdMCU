@@ -106,6 +106,13 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
+	/* la UART la inicializa el módulo API_uart (no MX_USART2_UART_Init) */
+	if (!uartInit()) {
+		Error_Handler();
+	}
+
+	uartSendString((uint8_t *)"Practica 5 - API_uart OK\r\n");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -193,17 +200,17 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
 
-	huart2.Instance = USART2;
-	huart2.Init.BaudRate = 115200;
-	huart2.Init.WordLength = UART_WORDLENGTH_8B;
-	huart2.Init.StopBits = UART_STOPBITS_1;
-	huart2.Init.Parity = UART_PARITY_NONE;
-	huart2.Init.Mode = UART_MODE_TX_RX;
-	huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-	huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-	if (HAL_UART_Init(&huart2) != HAL_OK){
-		Error_Handler();
-	}
+//	huart2.Instance = USART2;
+//	huart2.Init.BaudRate = 115200;
+//	huart2.Init.WordLength = UART_WORDLENGTH_8B;
+//	huart2.Init.StopBits = UART_STOPBITS_1;
+//	huart2.Init.Parity = UART_PARITY_NONE;
+//	huart2.Init.Mode = UART_MODE_TX_RX;
+//	huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+//	huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+//	if (HAL_UART_Init(&huart2) != HAL_OK){
+//		Error_Handler();
+//	}
 
   /* USER CODE BEGIN USART2_Init 2 */
 

@@ -7,18 +7,19 @@
 
 
 #include "API_delay.h"
+#include "API_common.h"
 
 // carga duration, running en false, no arranca el conteo
 void delayInit(delay_t * delay, tick_t duration) {
 
 	// valid delay
 	if (delay == NULL) {
-		Error_APIdelay_Handler();
+		Error_API_Handler();
 		return;
 	}
 
 	if (duration <= 0) {
-		Error_APIdelay_Handler();
+		Error_API_Handler();
 		return;
 	}
 
@@ -32,7 +33,7 @@ void delayInit(delay_t * delay, tick_t duration) {
 bool_t delayRead(delay_t * delay) {
 
 	if (delay == NULL) {
-		Error_APIdelay_Handler();
+		Error_API_Handler();
 		return false;
 	}
 
@@ -60,12 +61,12 @@ bool_t delayRead(delay_t * delay) {
 void delayWrite(delay_t * delay, tick_t duration) {
 
 	if (delay == NULL) {
-		Error_APIdelay_Handler();
+		Error_API_Handler();
 		return;
 	}
 
 	if (duration == 0) {
-		Error_APIdelay_Handler();
+		Error_API_Handler();
 		return;
 	}
 
@@ -79,19 +80,10 @@ void delayWrite(delay_t * delay, tick_t duration) {
 bool_t delayIsRunning(delay_t * delay) {
 
 	if (delay == NULL) {
-		Error_APIdelay_Handler();
+		Error_API_Handler();
 		return false;
 	}
 
 	return delay->running;
 }
 
-
-void Error_APIdelay_Handler(void) {
-	/* USER CODE BEGIN Error_Handler_Debug */
-	/* User can add his own implementation to report the HAL error return state */
-	__disable_irq();
-	while (1) {
-	}
-	/* USER CODE END Error_Handler_Debug */
-}
