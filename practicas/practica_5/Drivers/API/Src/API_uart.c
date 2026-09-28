@@ -11,7 +11,7 @@
 #include <stddef.h>
 
 #define UART_INSTANCE        USART2
-#define UART_BAUDRATE        115200U
+#define UART_BAUDRATE        115200U // init baud
 #define UART_TX_TIMEOUT_MS   1000U
 #define UART_RX_TIMEOUT_MS   10U
 #define UART_CFG_MSG_LEN     256U
@@ -87,6 +87,41 @@ void uartReceiveStringSize(uint8_t * pstring, uint16_t size)
 	if (status == HAL_BUSY) {
 		Error_API_Handler();
 	}
+}
+
+
+//---------------------------------------------//
+uint32_t uartGetBaudrate(void)
+{
+	return uartHandle.Init.BaudRate;
+}
+
+bool_t uartSetBaudrate(uint32_t baudrate)
+{
+	if (baudrate < UART_BAUD_MIN || baudrate > UART_BAUD_MAX || !uartReady) {
+		return false;
+	}
+
+	uint32_t oldBaud = uartHandle.Init.BaudRate;
+
+	if (HAL_UART_DeInit(&uartHandle) != HAL_OK) {
+		Error_API_Handler();
+	}
+
+	uartHandle.Init.BaudRate = baudrate;
+
+	if (HAL_UART_Init(&uartHandle) != HAL_OK) {
+		/* no se pudo: se vuelve al baudrate anterior */
+		uartHandle.Init.BaudRate = oldBaud;
+		if (HAL_UART_Init(&uartHandle) != HAL_OK) {
+			uartReady = false;
+			Error_API_Handler();
+		}
+		return false;
+	}
+
+	uartPrintConfig();
+	return true;
 }
 
 /* ------------------------------------------------------------------------- */

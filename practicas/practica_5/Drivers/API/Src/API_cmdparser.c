@@ -18,9 +18,12 @@
 #include "main.h"          /* LD2_Pin, LD2_GPIO_Port */
 #include <string.h>
 #include <ctype.h>
+#include <stdio.h>
 
 #define CMD_BYTES_PER_POLL  16U
 #define CMD_DELIMITERS      " \t"
+#define CMD_BAUD_MAX_DIGITS 6U          /* 921600 */
+#define CMD_MSG_LEN         48U
 
 /* Estados de la MEF */
 typedef enum {
@@ -37,12 +40,15 @@ typedef enum {
 	CMD_ID_LED_ON,
 	CMD_ID_LED_OFF,
 	CMD_ID_LED_TOGGLE,
-	CMD_ID_STATUS
+	CMD_ID_STATUS,
+	CMD_ID_BAUD_GET,
+	CMD_ID_BAUD_SET
 } cmd_id_t;
 
 static cmd_state_t  state = CMD_IDLE;
 static cmd_status_t lastError = CMD_OK;
 static cmd_id_t     cmdId = CMD_ID_HELP;
+static uint32_t     cmdBaud = 0;       /* argumento de BAUD=<valor>         */
 
 static char    line[CMD_MAX_LINE];     /* línea recibida                    */
 static uint8_t lineLen = 0;
@@ -60,6 +66,7 @@ static void   cmdPrintError(void);
 static bool_t cmdIsTerminator(uint8_t c);
 static bool_t cmdIsComment(const char *s);
 static void   cmdToUpper(char *s);
+static bool_t cmdParseUint(const char *s, uint32_t *value);
 
 /* ------------------------------------------------------------------------- */
 
@@ -110,7 +117,8 @@ void cmdPrintHelp(void)
 			"Comandos:\r\n"
 			"  HELP\r\n"
 			"  LED ON | LED OFF | LED TOGGLE\r\n"
-			"  STATUS\r\n");
+			"  STATUS\r\n"
+			"  BAUD? | BAUD=<9600..921600>\r\n");
 }
 
 /* ------------------------------------------------------------------------- */
@@ -220,6 +228,18 @@ static void cmdProcessLine(void)
 		else if (strcmp(tokens[1], "TOGGLE") == 0)  cmdId = CMD_ID_LED_TOGGLE;
 		else                                        lastError = CMD_ERR_ARG;
 	}
+	else if (strcmp(tokens[0], "BAUD?") == 0) {
+		cmdId = CMD_ID_BAUD_GET;
+		if (tokenCount != 1) lastError = CMD_ERR_ARG;
+	}
+	else if (strncmp(tokens[0], "BAUD=", 5) == 0) {
+		cmdId = CMD_ID_BAUD_SET;
+		if (tokenCount != 1
+				|| !cmdParseUint(&tokens[0][5], &cmdBaud)
+				|| cmdBaud < UART_BAUD_MIN || cmdBaud > UART_BAUD_MAX) {
+			lastError = CMD_ERR_ARG;
+		}
+	}
 	else {
 		lastError = CMD_ERR_UNKNOWN;
 	}
@@ -260,6 +280,21 @@ static void cmdExec(void)
 		}
 		break;
 
+	case CMD_ID_BAUD_GET: {
+		char msg[CMD_MSG_LEN];
+		snprintf(msg, sizeof(msg), "BAUD=%lu\r\n", (unsigned long)uartGetBaudrate());
+		uartSendString((uint8_t *)msg);
+		break;
+	}
+
+	case CMD_ID_BAUD_SET:
+		/* el OK sale con el baudrate viejo; luego hay que cambiar la terminal */
+		uartSendString((uint8_t *)"OK\r\n");
+		if (!uartSetBaudrate(cmdBaud)) {
+			uartSendString((uint8_t *)"ERROR: baud change failed\r\n");
+		}
+		break;
+
 	default:
 		break;
 	}
@@ -296,4 +331,25 @@ static void cmdToUpper(char *s)
 	for (; *s != '\0'; s++) {
 		*s = (char)toupper((unsigned char)*s);
 	}
+}
+
+/* Convierte un string de solo dígitos a número (máx. CMD_BAUD_MAX_DIGITS) */
+static bool_t cmdParseUint(const char *s, uint32_t *value)
+{
+	uint32_t result = 0;
+	uint8_t  digits = 0;
+
+	if (*s == '\0') {
+		return false;
+	}
+
+	for (; *s != '\0'; s++) {
+		if (!isdigit((unsigned char)*s) || ++digits > CMD_BAUD_MAX_DIGITS) {
+			return false;
+		}
+		result = result * 10U + (uint32_t)(*s - '0');
+	}
+
+	*value = result;
+	return true;
 }
