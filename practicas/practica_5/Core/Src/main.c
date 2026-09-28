@@ -25,6 +25,7 @@
 #include "API_debounce.h"
 #include "API_delay.h"
 #include "API_uart.h"
+#include "API_cmdparser.h"
 
 /* USER CODE END Includes */
 
@@ -40,17 +41,14 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define LED_BLINK_DELAY_T01  500 // parpadeo cada 500 ms
-#define LED_BLINK_DELAY_T02  100 // parpadeo cada 100 ms
+#define STARTUP_DELAY_MS  100U
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-UART_HandleTypeDef huart2;
+//UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
-static delay_t blink_delay;       // cronometro no bloqueante del parpadeo del LED
-static tick_t  blink_period = LED_BLINK_DELAY_T01; //parpadeo inicial
 
 
 
@@ -59,7 +57,7 @@ static tick_t  blink_period = LED_BLINK_DELAY_T01; //parpadeo inicial
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_USART2_UART_Init(void);
+//static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 
@@ -89,9 +87,6 @@ int main(void)
 
   /* USER CODE BEGIN Init */
 
-	debounceFSM_init();
-	delayInit(&blink_delay, blink_period);
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -103,15 +98,16 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART2_UART_Init();
+//  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-	/* la UART la inicializa el módulo API_uart (no MX_USART2_UART_Init) */
+	/* la UART la inicializa el módulo API_uart*/
 	if (!uartInit()) {
 		Error_Handler();
 	}
+	HAL_Delay(STARTUP_DELAY_MS);
 
-	uartSendString((uint8_t *)"Practica 5 - API_uart OK\r\n");
+	cmdParserInit();
 
   /* USER CODE END 2 */
 
@@ -122,17 +118,8 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-		debounceFSM_update();
+		cmdPoll();
 
-		if (readKey()) {
-			/* alterna el periodo de parpadeo cada vez que se confirma una pulsación */
-			blink_period = (blink_period == LED_BLINK_DELAY_T01) ? LED_BLINK_DELAY_T02 : LED_BLINK_DELAY_T01;
-		}
-
-		if (delayRead(&blink_delay)) {
-			HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
-			delayWrite(&blink_delay, blink_period);
-		}
 	}
   /* USER CODE END 3 */
 }
@@ -199,19 +186,18 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 1 */
 
   /* USER CODE END USART2_Init 1 */
-
-//	huart2.Instance = USART2;
-//	huart2.Init.BaudRate = 115200;
-//	huart2.Init.WordLength = UART_WORDLENGTH_8B;
-//	huart2.Init.StopBits = UART_STOPBITS_1;
-//	huart2.Init.Parity = UART_PARITY_NONE;
-//	huart2.Init.Mode = UART_MODE_TX_RX;
-//	huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-//	huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-//	if (HAL_UART_Init(&huart2) != HAL_OK){
-//		Error_Handler();
-//	}
-
+//  huart2.Instance = USART2;
+//  huart2.Init.BaudRate = 115200;
+//  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+//  huart2.Init.StopBits = UART_STOPBITS_1;
+//  huart2.Init.Parity = UART_PARITY_NONE;
+//  huart2.Init.Mode = UART_MODE_TX_RX;
+//  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+//  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+//  if (HAL_UART_Init(&huart2) != HAL_OK)
+//  {
+//    Error_Handler();
+//  }
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */

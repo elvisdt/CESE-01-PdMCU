@@ -14,7 +14,7 @@
 #define UART_BAUDRATE        115200U
 #define UART_TX_TIMEOUT_MS   1000U
 #define UART_RX_TIMEOUT_MS   10U
-#define UART_CFG_MSG_LEN     64U
+#define UART_CFG_MSG_LEN     256U
 
 static UART_HandleTypeDef uartHandle;
 static bool_t             uartReady = false;
@@ -81,8 +81,10 @@ void uartReceiveStringSize(uint8_t * pstring, uint16_t size)
 
 	HAL_StatusTypeDef status = HAL_UART_Receive(&uartHandle, pstring, size, UART_RX_TIMEOUT_MS);
 
-	/* HAL_TIMEOUT = no llegaron datos, no es error */
-	if (status != HAL_OK && status != HAL_TIMEOUT) {
+	/* HAL_TIMEOUT: no llegaron datos.
+	 * HAL_ERROR: overrun (se perdió un byte); la HAL ya limpió el flag,
+	 * no se bloquea el sistema por eso. Solo HAL_BUSY es un error real. */
+	if (status == HAL_BUSY) {
 		Error_API_Handler();
 	}
 }
@@ -118,14 +120,28 @@ static void uartTransmit(uint8_t * pdata, uint16_t size)
 	}
 }
 
-/* Imprime la configuración de la UART */
+/* Imprime los parámetros de configuración de la UART (leídos del handle) */
 static void uartPrintConfig(void)
 {
 	static uint8_t msg[UART_CFG_MSG_LEN];
+	UART_InitTypeDef *cfg = &uartHandle.Init;
 
 	int n = snprintf((char *)msg, sizeof(msg),
-			"\r\nHello! UART2 init: %lu baudios, 8N1\r\n",
-			(unsigned long)uartHandle.Init.BaudRate);
+			"\r\n--- UART2 init OK ---\r\n"
+			"  Baudrate     : %lu\r\n"
+			"  Word length  : %s\r\n"
+			"  Parity       : %s\r\n"
+			"  Stop bits    : %s\r\n"
+			"  Flow control : %s\r\n"
+			"  Mode         : %s\r\n",
+			(unsigned long)cfg->BaudRate,
+			(cfg->WordLength == UART_WORDLENGTH_9B) ? "9 bits" : "8 bits",
+			(cfg->Parity == UART_PARITY_NONE) ? "none" :
+			(cfg->Parity == UART_PARITY_EVEN) ? "even" : "odd",
+			(cfg->StopBits == UART_STOPBITS_2) ? "2" : "1",
+			(cfg->HwFlowCtl == UART_HWCONTROL_NONE) ? "none" : "RTS/CTS",
+			(cfg->Mode == UART_MODE_TX_RX) ? "TX/RX" :
+			(cfg->Mode == UART_MODE_TX) ? "TX" : "RX");
 
 	if (n > 0) {
 		uartSendString(msg);
