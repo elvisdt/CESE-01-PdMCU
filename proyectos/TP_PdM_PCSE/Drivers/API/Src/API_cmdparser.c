@@ -4,7 +4,7 @@
  *  Created on: 24 sept 2026
  *      Author: elvisdt
  *
- *  Parser de comandos por UART (polling) con MEF de 5 estados:
+ *  MEF de 5 estados (práctica 5):
  *
  *    IDLE ──(char normal)──> RECEIVING ──(\r o \n)──> PROCESS ──(ok)──> EXEC ──> IDLE
  *                                │                       │
@@ -15,64 +15,41 @@
 
 #include "API_cmdparser.h"
 #include "API_uart.h"
-#include "API_gpio.h"
 
 #include <string.h>
 #include <ctype.h>
-#include <stdio.h>
+#include <stddef.h>
 
 /* Private defines -----------------------------------------------------------*/
-#define CMD_MAX_LINE        64U         /* incluye '\0'                      */
-#define CMD_MAX_TOKENS      3U          /* COMANDO + máximo 2 argumentos     */
+#define CMD_MAX_LINE        64U         /* incluye '\0'  */
 #define CMD_BYTES_PER_POLL  16U
 #define CMD_DELIMITERS      " \t"
-#define CMD_BAUD_MAX_DIGITS 6U          /* 921600 */
-#define CMD_MSG_LEN         48U
+#define CMD_FLOAT_MAX_DIGITS 7U
 
 /* Private types -------------------------------------------------------------*/
-
-/* Resultado del procesamiento de una línea */
-typedef enum {
-	CMD_OK = 0,
-	CMD_ERR_OVERFLOW,
-	CMD_ERR_SYNTAX,
-	CMD_ERR_UNKNOWN,
-	CMD_ERR_ARG
-} cmd_status_t;
-
-/* Estados de la MEF */
 typedef enum {
 	CMD_IDLE = 0,
 	CMD_RECEIVING,
 	CMD_PROCESS,
 	CMD_EXEC,
 	CMD_ERROR
-} cmd_state_t;
-
-/* Comandos reconocidos */
-typedef enum {
-	CMD_ID_HELP = 0,
-	CMD_ID_LED_ON,
-	CMD_ID_LED_OFF,
-	CMD_ID_LED_TOGGLE,
-	CMD_ID_STATUS,
-	CMD_ID_BAUD_GET,
-	CMD_ID_BAUD_SET
-} cmd_id_t;
+} cmdState_t;
 
 /* Private variables ---------------------------------------------------------*/
-static cmd_state_t  state = CMD_IDLE;
-static cmd_status_t lastError = CMD_OK;
-static cmd_id_t     cmdId = CMD_ID_HELP;
-static uint32_t     cmdBaud = 0;       /* argumento de BAUD=<valor>         */
+static const cmdEntry_t *cmdTable = NULL;
+static uint8_t           cmdCount = 0;
+static const cmdEntry_t *cmdFound = NULL;   /* comando validado en PROCESS */
 
-static char    line[CMD_MAX_LINE];     /* línea recibida                    */
+static cmdState_t  state     = CMD_IDLE;
+static cmdStatus_t lastError = CMD_OK;
+
+static char    line[CMD_MAX_LINE];
 static uint8_t lineLen = 0;
-static char   *tokens[CMD_MAX_TOKENS];
-static uint8_t tokenCount = 0;
+static char   *argv[CMD_MAX_ARGS];
+static uint8_t argc = 0;
 
-static bool_t  prevWasCR = false;      /* para tratar \r\n como un solo fin  */
-static bool_t  discardLine = false;    /* descartar resto de línea larga     */
+static bool_t  prevWasCR   = false;
+static bool_t  discardLine = false;
 
 /* Private function prototypes -----------------------------------------------*/
 static void   cmdOnChar(uint8_t c);
@@ -82,43 +59,48 @@ static void   cmdPrintError(void);
 static bool_t cmdIsTerminator(uint8_t c);
 static bool_t cmdIsComment(const char *s);
 static void   cmdToUpper(char *s);
-static bool_t cmdParseUint(const char *s, uint32_t *value);
 
 /* Public functions ----------------------------------------------------------*/
 
-void cmdParserInit(void)
+bool_t cmdParserInit(const cmdEntry_t *table, uint8_t count)
 {
+	if (table == NULL || count == 0U) {
+		return false;
+	}
+	cmdTable    = table;
+	cmdCount    = count;
 	state       = CMD_IDLE;
 	lastError   = CMD_OK;
 	lineLen     = 0;
-	tokenCount  = 0;
+	argc        = 0;
 	prevWasCR   = false;
 	discardLine = false;
 
 	cmdPrintHelp();
+	return true;
 }
 
 void cmdPoll(void)
 {
-	for (uint8_t i = 0; i < CMD_BYTES_PER_POLL; i++) {
+	if (cmdTable == NULL) {
+		return;
+	}
 
+	for (uint8_t i = 0; i < CMD_BYTES_PER_POLL; i++) {
 		uint8_t c;
 		if (!uartReceiveByte(&c)) {
-			return;                     /* no llegó nada: se sigue en el próximo poll */
+			return;                     /* no llegó nada */
 		}
 
 		cmdOnChar(c);
 
-		/* Estados que no consumen caracteres: se resuelven en el mismo poll */
 		if (state == CMD_PROCESS) {
 			cmdProcessLine();           /* -> EXEC, ERROR o IDLE */
 		}
-
 		if (state == CMD_EXEC) {
-			cmdExec();
-			state = CMD_IDLE;
+			cmdExec();                  /* -> IDLE o ERROR */
 		}
-		else if (state == CMD_ERROR) {
+		if (state == CMD_ERROR) {
 			cmdPrintError();
 			state = CMD_IDLE;
 		}
@@ -127,48 +109,77 @@ void cmdPoll(void)
 
 void cmdPrintHelp(void)
 {
-	uartSendString((uint8_t *)
-			"Comandos:\r\n"
-			"  HELP\r\n"
-			"  LED ON | LED OFF | LED TOGGLE\r\n"
-			"  STATUS\r\n"
-			"  BAUD? | BAUD=<9600..921600>\r\n");
+	uartSendString((uint8_t *)"Comandos:\r\n  HELP\r\n");
+	for (uint8_t i = 0; i < cmdCount; i++) {
+		uartSendString((uint8_t *)"  ");
+		uartSendString((uint8_t *)cmdTable[i].help);
+		uartSendString((uint8_t *)"\r\n");
+	}
+}
+
+bool_t cmdParseFloat(const char *s, float *value)
+{
+	float   result = 0.0f;
+	float   scale  = 1.0f;
+	bool_t  neg    = false;
+	bool_t  dot    = false;
+	uint8_t digits = 0;
+
+	if (s == NULL || value == NULL || *s == '\0') {
+		return false;
+	}
+	if (*s == '-' || *s == '+') {
+		neg = (*s == '-');
+		s++;
+	}
+	for (; *s != '\0'; s++) {
+		if (*s == '.' && !dot) {
+			dot = true;
+		} else if (isdigit((unsigned char)*s) && ++digits <= CMD_FLOAT_MAX_DIGITS) {
+			if (dot) {
+				scale /= 10.0f;
+				result += (float)(*s - '0') * scale;
+			} else {
+				result = result * 10.0f + (float)(*s - '0');
+			}
+		} else {
+			return false;
+		}
+	}
+	if (digits == 0U) {
+		return false;
+	}
+	*value = neg ? -result : result;
+	return true;
 }
 
 /* Private functions ---------------------------------------------------------*/
 
-/* Estados IDLE y RECEIVING: arman la línea caracter a caracter */
+/* IDLE y RECEIVING: arman la línea caracter a caracter (con eco) */
 static void cmdOnChar(uint8_t c)
 {
-	/* '\n' justo después de '\r' es el mismo fin de línea: se ignora */
-	if (c == '\n' && prevWasCR) {
+	if (c == '\n' && prevWasCR) {       /* \r\n es un solo fin de línea */
 		prevWasCR = false;
 		return;
 	}
 	prevWasCR = (c == '\r');
 
-	/* eco: el terminador se devuelve como \r\n (nada si se descarta la línea) */
-	if (discardLine) {
-		/* sin eco */
-	}
-	else if (cmdIsTerminator(c)) {
-		uartSendString((uint8_t *)"\r\n");
-	}
-	else {
-		uartSendStringSize(&c, 1);
+	if (!discardLine) {
+		if (cmdIsTerminator(c)) {
+			uartSendString((uint8_t *)"\r\n");
+		} else {
+			uartSendStringSize(&c, 1);
+		}
 	}
 
 	switch (state) {
-
 	case CMD_IDLE:
-		/* después de un overflow se descarta hasta el fin de esa línea */
-		if (discardLine) {
+		if (discardLine) {              /* resto de una línea demasiado larga */
 			if (cmdIsTerminator(c)) {
 				discardLine = false;
 			}
 			break;
 		}
-		/* espera el primer caracter que no sea terminador */
 		if (!cmdIsTerminator(c)) {
 			lineLen = 0;
 			line[lineLen++] = (char)c;
@@ -180,11 +191,9 @@ static void cmdOnChar(uint8_t c)
 		if (cmdIsTerminator(c)) {
 			line[lineLen] = '\0';
 			state = CMD_PROCESS;
-		}
-		else if (lineLen < (CMD_MAX_LINE - 1U)) {   /* deja lugar al '\0' */
+		} else if (lineLen < (CMD_MAX_LINE - 1U)) {
 			line[lineLen++] = (char)c;
-		}
-		else {
+		} else {
 			lastError   = CMD_ERR_OVERFLOW;
 			discardLine = true;
 			state       = CMD_ERROR;
@@ -192,12 +201,11 @@ static void cmdOnChar(uint8_t c)
 		break;
 
 	default:
-		/* PROCESS, EXEC y ERROR se resuelven en cmdPoll() */
-		break;
+		break;                          /* PROCESS, EXEC, ERROR: en cmdPoll() */
 	}
 }
 
-/* Estado PROCESS: comentarios, tokeniza y valida comando + argumentos */
+/* PROCESS: comentarios, separa palabras, busca el comando y valida argumentos */
 static void cmdProcessLine(void)
 {
 	if (cmdIsComment(line)) {
@@ -205,124 +213,69 @@ static void cmdProcessLine(void)
 		return;
 	}
 
-	/* separa por espacios/tabs (múltiples se ignoran) */
-	tokenCount = 0;
+	argc = 0;
 	char *tok = strtok(line, CMD_DELIMITERS);
-
 	while (tok != NULL) {
-		if (tokenCount >= CMD_MAX_TOKENS) {
+		if (argc >= CMD_MAX_ARGS) {
 			lastError = CMD_ERR_ARG;
 			state = CMD_ERROR;
 			return;
 		}
-		cmdToUpper(tok);                 /* case-insensitive */
-		tokens[tokenCount++] = tok;
+		cmdToUpper(tok);
+		argv[argc++] = tok;
 		tok = strtok(NULL, CMD_DELIMITERS);
 	}
 
-	if (tokenCount == 0) {               /* línea con solo espacios */
+	if (argc == 0U) {                   /* línea con solo espacios */
 		state = CMD_IDLE;
 		return;
 	}
 
-	lastError = CMD_OK;
+	if (strcmp(argv[0], "HELP") == 0) {
+		cmdFound = NULL;                /* incorporado */
+		state = (argc == 1U) ? CMD_EXEC : CMD_ERROR;
+		lastError = (argc == 1U) ? CMD_OK : CMD_ERR_ARG;
+		return;
+	}
 
-	if (strcmp(tokens[0], "HELP") == 0) {
-		cmdId = CMD_ID_HELP;
-		if (tokenCount != 1) lastError = CMD_ERR_ARG;
-	}
-	else if (strcmp(tokens[0], "STATUS") == 0) {
-		cmdId = CMD_ID_STATUS;
-		if (tokenCount != 1) lastError = CMD_ERR_ARG;
-	}
-	else if (strcmp(tokens[0], "LED") == 0) {
-		if (tokenCount != 2)                        lastError = CMD_ERR_ARG;
-		else if (strcmp(tokens[1], "ON") == 0)      cmdId = CMD_ID_LED_ON;
-		else if (strcmp(tokens[1], "OFF") == 0)     cmdId = CMD_ID_LED_OFF;
-		else if (strcmp(tokens[1], "TOGGLE") == 0)  cmdId = CMD_ID_LED_TOGGLE;
-		else                                        lastError = CMD_ERR_ARG;
-	}
-	else if (strcmp(tokens[0], "BAUD?") == 0) {
-		cmdId = CMD_ID_BAUD_GET;
-		if (tokenCount != 1) lastError = CMD_ERR_ARG;
-	}
-	else if (strncmp(tokens[0], "BAUD=", 5) == 0) {
-		cmdId = CMD_ID_BAUD_SET;
-		if (tokenCount != 1
-				|| !cmdParseUint(&tokens[0][5], &cmdBaud)
-				|| cmdBaud < UART_BAUD_MIN || cmdBaud > UART_BAUD_MAX) {
-			lastError = CMD_ERR_ARG;
+	for (uint8_t i = 0; i < cmdCount; i++) {
+		if (strcmp(argv[0], cmdTable[i].name) == 0) {
+			uint8_t nArgs = (uint8_t)(argc - 1U);
+			if (nArgs < cmdTable[i].minArgs || nArgs > cmdTable[i].maxArgs) {
+				lastError = CMD_ERR_ARG;
+				state = CMD_ERROR;
+			} else {
+				cmdFound = &cmdTable[i];
+				state = CMD_EXEC;
+			}
+			return;
 		}
 	}
-	else {
-		lastError = CMD_ERR_UNKNOWN;
-	}
 
-	state = (lastError == CMD_OK) ? CMD_EXEC : CMD_ERROR;
+	lastError = CMD_ERR_UNKNOWN;
+	state = CMD_ERROR;
 }
 
-/* Estado EXEC: ejecuta la acción del comando validado */
+/* EXEC: llama al handler; si devuelve error se informa */
 static void cmdExec(void)
 {
-	switch (cmdId) {
-
-	case CMD_ID_HELP:
+	if (cmdFound == NULL) {
 		cmdPrintHelp();
-		break;
-
-	case CMD_ID_LED_ON:
-		gpioLedOn();
-		uartSendString((uint8_t *)"OK\r\n");
-		break;
-
-	case CMD_ID_LED_OFF:
-		gpioLedOff();
-		uartSendString((uint8_t *)"OK\r\n");
-		break;
-
-	case CMD_ID_LED_TOGGLE:
-		gpioLedToggle();
-		uartSendString((uint8_t *)"OK\r\n");
-		break;
-
-	case CMD_ID_STATUS:
-		if (gpioLedIsOn()) {
-			uartSendString((uint8_t *)"LED is ON\r\n");
-		}
-		else {
-			uartSendString((uint8_t *)"LED is OFF\r\n");
-		}
-		break;
-
-	case CMD_ID_BAUD_GET: {
-		char msg[CMD_MSG_LEN];
-		snprintf(msg, sizeof(msg), "BAUD=%lu\r\n", (unsigned long)uartGetBaudrate());
-		uartSendString((uint8_t *)msg);
-		break;
+		state = CMD_IDLE;
+		return;
 	}
-
-	case CMD_ID_BAUD_SET:
-		/* el OK sale con el baudrate viejo; luego hay que cambiar la terminal */
-		uartSendString((uint8_t *)"OK\r\n");
-		if (!uartSetBaudrate(cmdBaud)) {
-			uartSendString((uint8_t *)"ERROR: baud change failed\r\n");
-		}
-		break;
-
-	default:
-		break;
-	}
+	lastError = cmdFound->handler(argc, argv);
+	state = (lastError == CMD_OK) ? CMD_IDLE : CMD_ERROR;
 }
 
-/* Estado ERROR: mensaje según el error */
 static void cmdPrintError(void)
 {
 	switch (lastError) {
 	case CMD_ERR_OVERFLOW: uartSendString((uint8_t *)"\r\nERROR: line too long\r\n"); break;
-	case CMD_ERR_UNKNOWN:  uartSendString((uint8_t *)"ERROR: unknown command\r\n"); break;
-	case CMD_ERR_ARG:      uartSendString((uint8_t *)"ERROR: bad arguments\r\n");   break;
-	case CMD_ERR_SYNTAX:   uartSendString((uint8_t *)"ERROR: syntax\r\n");          break;
-	default:                                                                        break;
+	case CMD_ERR_UNKNOWN:  uartSendString((uint8_t *)"ERROR: unknown command\r\n");   break;
+	case CMD_ERR_ARG:      uartSendString((uint8_t *)"ERROR: bad arguments\r\n");     break;
+	case CMD_ERR_SYNTAX:   uartSendString((uint8_t *)"ERROR: syntax\r\n");            break;
+	default:                                                                          break;
 	}
 }
 
@@ -331,7 +284,6 @@ static bool_t cmdIsTerminator(uint8_t c)
 	return (c == '\r') || (c == '\n');
 }
 
-/* true si la línea empieza con '#' o "//" (ignorando espacios iniciales) */
 static bool_t cmdIsComment(const char *s)
 {
 	while (*s == ' ' || *s == '\t') {
@@ -345,25 +297,4 @@ static void cmdToUpper(char *s)
 	for (; *s != '\0'; s++) {
 		*s = (char)toupper((unsigned char)*s);
 	}
-}
-
-/* Convierte un string de solo dígitos a número (máx. CMD_BAUD_MAX_DIGITS) */
-static bool_t cmdParseUint(const char *s, uint32_t *value)
-{
-	uint32_t result = 0;
-	uint8_t  digits = 0;
-
-	if (*s == '\0') {
-		return false;
-	}
-
-	for (; *s != '\0'; s++) {
-		if (!isdigit((unsigned char)*s) || ++digits > CMD_BAUD_MAX_DIGITS) {
-			return false;
-		}
-		result = result * 10U + (uint32_t)(*s - '0');
-	}
-
-	*value = result;
-	return true;
 }

@@ -6,18 +6,26 @@ Propuesta y diagramas en [`docs/`](docs/).
 
 ## Estado de los módulos
 
-| Módulo | Origen | Estado | Prueba |
+Todo compila; falta probar cada uno en la placa (columna "Prueba").
+
+| Módulo | Port | Origen | Prueba |
 |---|---|---|---|
-| `API_delay` | Práctica 3 | listo | `TEST_DELAY` |
-| `API_uart`, `API_cmdparser` | Práctica 5 | listo (comandos de P5) | `TEST_UART` |
-| `API_debounce` | Práctica 4 | adaptado a 3 pulsadores | `TEST_DEBOUNCE` |
-| `API_gpio` | Práctica 5 | LED + buzzer | `TEST_ALARM` |
-| `API_port` (STM32F4xx) | Práctica 5 | + I2C, encoder, buzzer, pulsadores | — |
-| `API_encoder` | nuevo | listo | `TEST_ENCODER` |
-| `API_lcd` | nuevo | **esqueleto** (`lcdSendNibble`, `lcdInit`) | `TEST_I2C_SCAN`, `TEST_LCD` |
-| `API_bme280` | nuevo | **esqueleto** (chip ID listo; calibración y lectura) | `TEST_BME280` |
-| `API_alarm` | nuevo | **esqueleto** (`alarmUpdate`) | `TEST_ALARM` |
-| `app_ui` | nuevo | **esqueleto** (MEF de interfaz) | `TEST_NONE` |
+| `API_delay` | — | Práctica 3 | `TEST_DELAY` |
+| `API_uart` | `API_port` | Práctica 5 | `TEST_UART` |
+| `API_cmdparser` | — | Práctica 5, ahora con tabla de comandos | `TEST_UART` |
+| `API_debounce` | `API_port` | Práctica 4, 3 pulsadores | `TEST_DEBOUNCE` |
+| `API_gpio` | `API_port` | LED + buzzer | `TEST_ALARM` |
+| `API_encoder` | `API_encoder_port` | nuevo | `TEST_ENCODER` |
+| `API_lcd` | `API_lcd_port` | nuevo (ref. PCSE) | `TEST_I2C_SCAN`, `TEST_LCD` |
+| `API_bme280` | `API_bme280_port` | nuevo | `TEST_BME280` |
+| `API_alarm` | — | nuevo | `TEST_ALARM` |
+| `app_ui` | — | MEF de interfaz + comandos | `TEST_NONE` |
+
+Capas: `App` → `Drivers/API` (sin HAL) → `API_xxx_port.c` (por dispositivo) →
+`port_stm32f4xx.c` (único con HAL: bus I2C, timer, UART y GPIO).
+
+Comandos de la consola (`TEST_NONE`): `HELP`, `GET`, `LIM?`,
+`SET <T|H|P> <min> <max>`, `ALARM <ON|OFF>`, `STATUS`.
 
 ## Estructura
 

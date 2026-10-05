@@ -6,7 +6,7 @@
  */
 
 #include "API_encoder.h"
-#include "API_port.h"
+#include "API_encoder_port.h"
 
 /* Private defines -----------------------------------------------------------*/
 /* Cuentas del timer por cada "clic" del KY-040 en modo TI12.
@@ -21,17 +21,17 @@ static int16_t  remainder = 0;     /* cuentas que todavía no completan un paso 
 
 bool_t encoderInit(void)
 {
-	if (!portEncoderInit()) {
+	if (!encoderPortInit()) {
 		return false;
 	}
-	lastCount = portEncoderGetCount();
+	lastCount = encoderPortGetCount();
 	remainder = 0;
 	return true;
 }
 
 int16_t encoderGetDelta(void)
 {
-	uint16_t now = portEncoderGetCount();
+	uint16_t now = encoderPortGetCount();
 
 	/* resta en 16 bits: el cast a int16_t resuelve el desborde del contador */
 	int16_t diff = (int16_t)(uint16_t)(now - lastCount);

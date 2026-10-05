@@ -3,9 +3,12 @@
  *
  *  Created on: 4 oct 2026
  *      Author: elvisdt
+ *
+ *  Una prueba por módulo. Se elige con APP_TEST en app_test.h.
  */
 
 #include "app_test.h"
+#include "app_fmt.h"
 
 #include "API_delay.h"
 #include "API_uart.h"
@@ -14,11 +17,13 @@
 #include "API_debounce.h"
 #include "API_encoder.h"
 #include "API_lcd.h"
+#include "API_lcd_port.h"
 #include "API_bme280.h"
 #include "API_alarm.h"
 #include "API_port.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #define TEST_MSG_LEN   96U
 
@@ -51,10 +56,34 @@ void appTestUpdate(void)
 /* -------------------------------------------------------------------------- */
 #elif APP_TEST == TEST_UART
 
+/* comandos de la práctica 5 sobre el parser generalizado */
+static cmdStatus_t cmdLed(uint8_t argc, char *argv[])
+{
+	(void)argc;
+	if      (strcmp(argv[1], "ON") == 0)     gpioLedOn();
+	else if (strcmp(argv[1], "OFF") == 0)    gpioLedOff();
+	else if (strcmp(argv[1], "TOGGLE") == 0) gpioLedToggle();
+	else return CMD_ERR_ARG;
+	print("OK\r\n");
+	return CMD_OK;
+}
+
+static cmdStatus_t cmdStatus(uint8_t argc, char *argv[])
+{
+	(void)argc; (void)argv;
+	print(gpioLedIsOn() ? "LED is ON\r\n" : "LED is OFF\r\n");
+	return CMD_OK;
+}
+
+static const cmdEntry_t testCmds[] = {
+	{ "LED",    1, 1, cmdLed,    "LED <ON|OFF|TOGGLE>" },
+	{ "STATUS", 0, 0, cmdStatus, "STATUS" },
+};
+
 void appTestInit(void)
 {
-	print("TEST_UART: consola de la practica 5\r\n");
-	cmdParserInit();
+	print("TEST_UART: consola\r\n");
+	cmdParserInit(testCmds, (uint8_t)(sizeof(testCmds) / sizeof(testCmds[0])));
 }
 
 void appTestUpdate(void)
@@ -69,7 +98,7 @@ static uint16_t count[BTN_COUNT];
 
 void appTestInit(void)
 {
-	print("TEST_DEBOUNCE: presionar OK / BACK / SW\r\n");
+	print("TEST_DEBOUNCE: presionar OK / BACK / SW (sin labels, OK = B1)\r\n");
 	debounceFSM_init();
 }
 
@@ -137,22 +166,31 @@ void appTestUpdate(void)
 /* -------------------------------------------------------------------------- */
 #elif APP_TEST == TEST_LCD
 
+static uint32_t seconds = 0;
+
 void appTestInit(void)
 {
 	print("TEST_LCD\r\n");
 	if (!portI2cInit() || lcdInit() != LCD_OK) {
-		print("ERROR: LCD no responde o lcdInit() sin implementar\r\n");
+		print("ERROR: el LCD no responde (0x27). Probar 0x3F en API_lcd_port.h\r\n");
 		return;
 	}
 	lcdSetCursor(0, 0);
 	lcdPrint("Hola PdM");
 	lcdSetCursor(1, 0);
 	lcdPrint("CESE - FIUBA");
-	print("OK\r\n");
+	print("OK: en la fila 2 corre un contador de segundos\r\n");
+	delayInit(&period, 1000U);
 }
 
 void appTestUpdate(void)
 {
+	if (delayRead(&period)) {
+		seconds++;
+		snprintf(msg, sizeof(msg), "%5lu", (unsigned long)seconds);
+		lcdSetCursor(1, 11);
+		lcdPrint(msg);
+	}
 }
 
 /* -------------------------------------------------------------------------- */
@@ -164,7 +202,7 @@ void appTestInit(void)
 
 	print("TEST_BME280\r\n");
 	if (!portI2cInit() || bme280ReadChipId(&id) != BME280_OK) {
-		print("ERROR: BME280 no responde en 0x76\r\n");
+		print("ERROR: el BME280 no responde (0x76). Probar 0x77 en API_bme280_port.h\r\n");
 		return;
 	}
 	snprintf(msg, sizeof(msg), "chip ID = 0x%02X (esperado 0x60)\r\n", id);
@@ -178,16 +216,17 @@ void appTestInit(void)
 void appTestUpdate(void)
 {
 	bme280Data_t d;
+	char t[8], h[8], p[8];
 
 	if (delayRead(&period)) {
 		if (bme280Read(&d) == BME280_OK) {
-			/* printf de float requiere -u _printf_float; se imprime en décimas */
-			snprintf(msg, sizeof(msg), "T=%ld.%ld C  H=%ld %%  P=%ld hPa\r\n",
-					(long)(d.temperature), (long)(d.temperature * 10) % 10,
-					(long)d.humidity, (long)d.pressure);
+			fmtFloat1(t, sizeof(t), d.temperature);
+			fmtFloat1(h, sizeof(h), d.humidity);
+			fmtFloat1(p, sizeof(p), d.pressure);
+			snprintf(msg, sizeof(msg), "T=%s C  H=%s %%  P=%s hPa\r\n", t, h, p);
 			print(msg);
 		} else {
-			print("bme280Read(): sin implementar o error\r\n");
+			print("ERROR: bme280Read()\r\n");
 		}
 	}
 }
@@ -195,9 +234,11 @@ void appTestUpdate(void)
 /* -------------------------------------------------------------------------- */
 #elif APP_TEST == TEST_ALARM
 
+static uint8_t ticks = 0;
+
 void appTestInit(void)
 {
-	print("TEST_ALARM: OK habilita/deshabilita\r\n");
+	print("TEST_ALARM: OK habilita/deshabilita. Dato simulado: 5 s fuera de rango, 5 s dentro\r\n");
 	debounceFSM_init();
 	alarmInit();
 	delayInit(&period, 1000U);
@@ -206,16 +247,19 @@ void appTestInit(void)
 void appTestUpdate(void)
 {
 	static const char *name[] = { "DISABLED", "ARMED", "ACTIVE" };
-	/* medición simulada fuera de rango para forzar ACTIVE */
-	bme280Data_t fake = { 40.0f, 50.0f, 1000.0f };
 
 	debounceFSM_update();
 	if (readKey(BTN_OK)) {
 		alarmToggle();
 	}
+	alarmTask();
+
 	if (delayRead(&period)) {
+		/* temperatura simulada: 40 °C (fuera de 10..35) y luego 25 °C */
+		bme280Data_t fake = { (ticks < 5U) ? 40.0f : 25.0f, 50.0f, 1000.0f };
+		ticks = (uint8_t)((ticks + 1U) % 10U);
 		alarmUpdate(&fake);
-		snprintf(msg, sizeof(msg), "estado: %s\r\n", name[alarmGetState()]);
+		snprintf(msg, sizeof(msg), "T=%d  estado: %s\r\n", (int)fake.temperature, name[alarmGetState()]);
 		print(msg);
 	}
 }
