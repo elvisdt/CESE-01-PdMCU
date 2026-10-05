@@ -8,7 +8,7 @@
 #ifndef API_INC_API_DEBOUNCE_H_
 #define API_INC_API_DEBOUNCE_H_
 
-#include "API_delay.h"   /* trae bool_t */
+#include "API_common.h"
 
 /**
  * @brief  Carga el estado inicial de la MEF antirrebote.

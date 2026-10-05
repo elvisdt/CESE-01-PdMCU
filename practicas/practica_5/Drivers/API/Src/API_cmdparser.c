@@ -15,15 +15,30 @@
 
 #include "API_cmdparser.h"
 #include "API_uart.h"
-#include "main.h"          /* LD2_Pin, LD2_GPIO_Port */
+#include "API_gpio.h"
+
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
 
+/* Private defines -----------------------------------------------------------*/
+#define CMD_MAX_LINE        64U         /* incluye '\0'                      */
+#define CMD_MAX_TOKENS      3U          /* COMANDO + máximo 2 argumentos     */
 #define CMD_BYTES_PER_POLL  16U
 #define CMD_DELIMITERS      " \t"
 #define CMD_BAUD_MAX_DIGITS 6U          /* 921600 */
 #define CMD_MSG_LEN         48U
+
+/* Private types -------------------------------------------------------------*/
+
+/* Resultado del procesamiento de una línea */
+typedef enum {
+	CMD_OK = 0,
+	CMD_ERR_OVERFLOW,
+	CMD_ERR_SYNTAX,
+	CMD_ERR_UNKNOWN,
+	CMD_ERR_ARG
+} cmd_status_t;
 
 /* Estados de la MEF */
 typedef enum {
@@ -45,6 +60,7 @@ typedef enum {
 	CMD_ID_BAUD_SET
 } cmd_id_t;
 
+/* Private variables ---------------------------------------------------------*/
 static cmd_state_t  state = CMD_IDLE;
 static cmd_status_t lastError = CMD_OK;
 static cmd_id_t     cmdId = CMD_ID_HELP;
@@ -58,7 +74,7 @@ static uint8_t tokenCount = 0;
 static bool_t  prevWasCR = false;      /* para tratar \r\n como un solo fin  */
 static bool_t  discardLine = false;    /* descartar resto de línea larga     */
 
-/* Funciones privadas */
+/* Private function prototypes -----------------------------------------------*/
 static void   cmdOnChar(uint8_t c);
 static void   cmdProcessLine(void);
 static void   cmdExec(void);
@@ -68,7 +84,7 @@ static bool_t cmdIsComment(const char *s);
 static void   cmdToUpper(char *s);
 static bool_t cmdParseUint(const char *s, uint32_t *value);
 
-/* ------------------------------------------------------------------------- */
+/* Public functions ----------------------------------------------------------*/
 
 void cmdParserInit(void)
 {
@@ -86,11 +102,9 @@ void cmdPoll(void)
 {
 	for (uint8_t i = 0; i < CMD_BYTES_PER_POLL; i++) {
 
-		/* '\0' como centinela: si sigue en '\0' no llegó nada (timeout) */
-		uint8_t c = '\0';
-		uartReceiveStringSize(&c, 1);
-		if (c == '\0') {
-			return;
+		uint8_t c;
+		if (!uartReceiveByte(&c)) {
+			return;                     /* no llegó nada: se sigue en el próximo poll */
 		}
 
 		cmdOnChar(c);
@@ -121,7 +135,7 @@ void cmdPrintHelp(void)
 			"  BAUD? | BAUD=<9600..921600>\r\n");
 }
 
-/* ------------------------------------------------------------------------- */
+/* Private functions ---------------------------------------------------------*/
 
 /* Estados IDLE y RECEIVING: arman la línea caracter a caracter */
 static void cmdOnChar(uint8_t c)
@@ -257,22 +271,22 @@ static void cmdExec(void)
 		break;
 
 	case CMD_ID_LED_ON:
-		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_SET);
+		gpioLedOn();
 		uartSendString((uint8_t *)"OK\r\n");
 		break;
 
 	case CMD_ID_LED_OFF:
-		HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+		gpioLedOff();
 		uartSendString((uint8_t *)"OK\r\n");
 		break;
 
 	case CMD_ID_LED_TOGGLE:
-		HAL_GPIO_TogglePin(LD2_GPIO_Port, LD2_Pin);
+		gpioLedToggle();
 		uartSendString((uint8_t *)"OK\r\n");
 		break;
 
 	case CMD_ID_STATUS:
-		if (HAL_GPIO_ReadPin(LD2_GPIO_Port, LD2_Pin) == GPIO_PIN_SET) {
+		if (gpioLedIsOn()) {
 			uartSendString((uint8_t *)"LED is ON\r\n");
 		}
 		else {

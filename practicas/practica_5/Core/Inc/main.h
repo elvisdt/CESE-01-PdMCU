@@ -37,16 +37,6 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
-
-
-// structura auxiliar:
-
-typedef struct{
-	uint32_t  	duration; // tiempo que el led ON/OFF
-	uint8_t 	toggles;  // numero de veces a parpadear
-} blink_step_t;
-
-
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -64,20 +54,11 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
-//void delayInit( delay_t * delay, tick_t duration );
-//bool_t delayRead( delay_t * delay );
-//void delayWrite( delay_t * delay, tick_t duration );
-
-
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
 #define B1_Pin GPIO_PIN_13
 #define B1_GPIO_Port GPIOC
-#define USART_TX_Pin GPIO_PIN_2
-#define USART_TX_GPIO_Port GPIOA
-#define USART_RX_Pin GPIO_PIN_3
-#define USART_RX_GPIO_Port GPIOA
 #define LD2_Pin GPIO_PIN_5
 #define LD2_GPIO_Port GPIOA
 #define TMS_Pin GPIO_PIN_13

@@ -7,11 +7,9 @@
 
 #include "API_debounce.h"
 #include "API_delay.h"
-#include "stm32f4xx_hal.h"
+#include "API_gpio.h"
 
-/* Private defines - configuración de hardware del módulo --------------------*/
-#define BUTTON_GPIO_PORT   GPIOC
-#define BUTTON_GPIO_PIN    GPIO_PIN_13
+/* Private defines -----------------------------------------------------------*/
 #define DEBOUNCE_TIME_MS   ((tick_t)40)
 
 /* Private types ---------------------------------------------------------*/
@@ -94,8 +92,7 @@ bool_t readKey(void){
 /* Private functions ----------------------------------------------------------*/
 
 static bool_t readButtonPin(void){
-	// B1 es activo en bajo: presionado = pin en RESET
-	return (HAL_GPIO_ReadPin(BUTTON_GPIO_PORT, BUTTON_GPIO_PIN) == GPIO_PIN_RESET);
+	return gpioButtonIsPressed();
 }
 
 static void buttonPressed(void){

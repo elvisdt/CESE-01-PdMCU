@@ -3,46 +3,42 @@
  *
  *  Created on: 24 sept 2026
  *      Author: elvisdt
+ *
+ *  UART de consola en modo polling. Portable: el acceso al periférico
+ *  lo resuelve API_port (formato fijo 8N1, sin control de flujo).
  */
 
 #include "API_uart.h"
-#include "stm32f4xx_hal.h"
+#include "API_port.h"
+
 #include <stdio.h>
 #include <stddef.h>
 
-#define UART_INSTANCE        USART2
-#define UART_BAUDRATE        115200U // init baud
+/* Private defines -----------------------------------------------------------*/
 #define UART_TX_TIMEOUT_MS   1000U
 #define UART_RX_TIMEOUT_MS   10U
 #define UART_CFG_MSG_LEN     256U
 
-static UART_HandleTypeDef uartHandle;
-static bool_t             uartReady = false;
+/* Private variables ---------------------------------------------------------*/
+static uint32_t uartBaud  = 0U;
+static bool_t   uartReady = false;
 
-/* Funciones privadas */
+/* Private function prototypes -----------------------------------------------*/
 static bool_t   uartIsValidSize(uint32_t size);
 static uint32_t uartStrLen(const uint8_t * pstring, uint32_t maxLen);
-static void     uartTransmit(uint8_t * pdata, uint16_t size);
+static void     uartTransmit(const uint8_t * pdata, uint16_t size);
 static void     uartPrintConfig(void);
 
-/* ------------------------------------------------------------------------- */
+/* Public functions ----------------------------------------------------------*/
 
 bool_t uartInit(void)
 {
-	uartHandle.Instance          = UART_INSTANCE;
-	uartHandle.Init.BaudRate     = UART_BAUDRATE;
-	uartHandle.Init.WordLength   = UART_WORDLENGTH_8B;
-	uartHandle.Init.StopBits     = UART_STOPBITS_1;
-	uartHandle.Init.Parity       = UART_PARITY_NONE;
-	uartHandle.Init.Mode         = UART_MODE_TX_RX;
-	uartHandle.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
-	uartHandle.Init.OverSampling = UART_OVERSAMPLING_16;
-
-	if (HAL_UART_Init(&uartHandle) != HAL_OK) {
+	if (!portUartInit(UART_BAUD_INIT)) {
 		uartReady = false;
 		return false;
 	}
 
+	uartBaud  = UART_BAUD_INIT;
 	uartReady = true;
 	uartPrintConfig();
 	return true;
@@ -79,21 +75,33 @@ void uartReceiveStringSize(uint8_t * pstring, uint16_t size)
 		return;
 	}
 
-	HAL_StatusTypeDef status = HAL_UART_Receive(&uartHandle, pstring, size, UART_RX_TIMEOUT_MS);
+	port_status_t st = portUartRead(pstring, size, UART_RX_TIMEOUT_MS);
 
-	/* HAL_TIMEOUT: no llegaron datos.
-	 * HAL_ERROR: overrun (se perdió un byte); la HAL ya limpió el flag,
-	 * no se bloquea el sistema por eso. Solo HAL_BUSY es un error real. */
-	if (status == HAL_BUSY) {
+	/* TIMEOUT: no llegaron datos.
+	 * ERROR: overrun (se perdió un byte); el driver ya limpió el flag,
+	 * no se bloquea el sistema por eso. Solo BUSY es un error real. */
+	if (st == PORT_BUSY) {
 		Error_API_Handler();
 	}
 }
 
+bool_t uartReceiveByte(uint8_t * pbyte)
+{
+	if (pbyte == NULL || !uartReady) {
+		return false;
+	}
 
-//---------------------------------------------//
+	port_status_t st = portUartRead(pbyte, 1U, UART_RX_TIMEOUT_MS);
+
+	if (st == PORT_BUSY) {
+		Error_API_Handler();
+	}
+	return (st == PORT_OK);
+}
+
 uint32_t uartGetBaudrate(void)
 {
-	return uartHandle.Init.BaudRate;
+	return uartBaud;
 }
 
 bool_t uartSetBaudrate(uint32_t baudrate)
@@ -102,29 +110,25 @@ bool_t uartSetBaudrate(uint32_t baudrate)
 		return false;
 	}
 
-	uint32_t oldBaud = uartHandle.Init.BaudRate;
-
-	if (HAL_UART_DeInit(&uartHandle) != HAL_OK) {
+	if (!portUartDeInit()) {
 		Error_API_Handler();
 	}
 
-	uartHandle.Init.BaudRate = baudrate;
-
-	if (HAL_UART_Init(&uartHandle) != HAL_OK) {
+	if (!portUartInit(baudrate)) {
 		/* no se pudo: se vuelve al baudrate anterior */
-		uartHandle.Init.BaudRate = oldBaud;
-		if (HAL_UART_Init(&uartHandle) != HAL_OK) {
+		if (!portUartInit(uartBaud)) {
 			uartReady = false;
 			Error_API_Handler();
 		}
 		return false;
 	}
 
+	uartBaud = baudrate;
 	uartPrintConfig();
 	return true;
 }
 
-/* ------------------------------------------------------------------------- */
+/* Private functions ---------------------------------------------------------*/
 
 /* true si size está en [UART_MIN_SIZE, UART_MAX_SIZE] */
 static bool_t uartIsValidSize(uint32_t size)
@@ -143,40 +147,32 @@ static uint32_t uartStrLen(const uint8_t * pstring, uint32_t maxLen)
 	return len;
 }
 
-/* Transmite y verifica el retorno de la HAL */
-static void uartTransmit(uint8_t * pdata, uint16_t size)
+/* Transmite y verifica el resultado del port */
+static void uartTransmit(const uint8_t * pdata, uint16_t size)
 {
 	if (!uartReady) {
 		return;
 	}
 
-	if (HAL_UART_Transmit(&uartHandle, pdata, size, UART_TX_TIMEOUT_MS) != HAL_OK) {
+	if (portUartWrite(pdata, size, UART_TX_TIMEOUT_MS) != PORT_OK) {
 		Error_API_Handler();
 	}
 }
 
-/* Imprime los parámetros de configuración de la UART (leídos del handle) */
+/* Imprime la configuración de la UART (formato fijo 8N1 del port) */
 static void uartPrintConfig(void)
 {
 	static uint8_t msg[UART_CFG_MSG_LEN];
-	UART_InitTypeDef *cfg = &uartHandle.Init;
 
 	int n = snprintf((char *)msg, sizeof(msg),
-			"\r\n--- UART2 init OK ---\r\n"
+			"\r\n--- UART init OK ---\r\n"
 			"  Baudrate     : %lu\r\n"
-			"  Word length  : %s\r\n"
-			"  Parity       : %s\r\n"
-			"  Stop bits    : %s\r\n"
-			"  Flow control : %s\r\n"
-			"  Mode         : %s\r\n",
-			(unsigned long)cfg->BaudRate,
-			(cfg->WordLength == UART_WORDLENGTH_9B) ? "9 bits" : "8 bits",
-			(cfg->Parity == UART_PARITY_NONE) ? "none" :
-			(cfg->Parity == UART_PARITY_EVEN) ? "even" : "odd",
-			(cfg->StopBits == UART_STOPBITS_2) ? "2" : "1",
-			(cfg->HwFlowCtl == UART_HWCONTROL_NONE) ? "none" : "RTS/CTS",
-			(cfg->Mode == UART_MODE_TX_RX) ? "TX/RX" :
-			(cfg->Mode == UART_MODE_TX) ? "TX" : "RX");
+			"  Word length  : 8 bits\r\n"
+			"  Parity       : none\r\n"
+			"  Stop bits    : 1\r\n"
+			"  Flow control : none\r\n"
+			"  Mode         : TX/RX\r\n",
+			(unsigned long)uartBaud);
 
 	if (n > 0) {
 		uartSendString(msg);

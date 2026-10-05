@@ -7,7 +7,8 @@
 
 
 #include "API_delay.h"
-#include "API_common.h"
+#include "API_port.h"
+#include <stddef.h>
 
 // carga duration, running en false, no arranca el conteo
 void delayInit(delay_t * delay, tick_t duration) {
@@ -18,7 +19,7 @@ void delayInit(delay_t * delay, tick_t duration) {
 		return;
 	}
 
-	if (duration <= 0) {
+	if (duration == 0U) {
 		Error_API_Handler();
 		return;
 	}
@@ -39,13 +40,13 @@ bool_t delayRead(delay_t * delay) {
 
 	// primera lectura del ciclo: arranca el conteo y termina
 	if (!delay->running) {
-		delay->startTime = HAL_GetTick();
+		delay->startTime = portGetTickMs();
 		delay->running   = true;
 		return false;
 	}
 
 	// ya está corriendo: ver si se cumplió la duración
-	tick_t elapsedTime = HAL_GetTick() - delay->startTime;
+	tick_t elapsedTime = portGetTickMs() - delay->startTime;
 
 	if (elapsedTime < delay->duration) {
 		return false;

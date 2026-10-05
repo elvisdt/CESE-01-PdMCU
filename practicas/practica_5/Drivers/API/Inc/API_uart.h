@@ -12,17 +12,16 @@
 extern "C" {
 #endif
 
-#include <stdint.h>
-#include <stdbool.h>
 #include "API_common.h"
 
 #define UART_MIN_SIZE   1U
 #define UART_MAX_SIZE   256U
 #define UART_BAUD_MIN   9600U
 #define UART_BAUD_MAX   921600U
+#define UART_BAUD_INIT  115200U
 
 /**
- * @brief  Inicializa USART2 (115200 8N1) e imprime su configuración.
+ * @brief  Inicializa la UART de consola (UART_BAUD_INIT, 8N1) e imprime su configuración.
  * @retval true si la inicialización fue exitosa, false si no.
  */
 bool_t uartInit(void);
@@ -46,6 +45,13 @@ void uartSendStringSize(uint8_t * pstring, uint16_t size);
  * @param  size: cantidad de bytes (1..UART_MAX_SIZE).
  */
 void uartReceiveStringSize(uint8_t * pstring, uint16_t size);
+
+/**
+ * @brief  Intenta recibir un byte (polling con timeout corto).
+ * @param  pbyte: destino del byte (no NULL).
+ * @retval true si llegó un byte, false si venció el timeout o hubo error.
+ */
+bool_t uartReceiveByte(uint8_t * pbyte);
 
 /**
  * @brief  Devuelve el baudrate actual de la UART.

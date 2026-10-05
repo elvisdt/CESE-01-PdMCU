@@ -22,8 +22,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "API_debounce.h"
-#include "API_delay.h"
 #include "API_uart.h"
 #include "API_cmdparser.h"
 
@@ -45,7 +43,7 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-//UART_HandleTypeDef huart2;
+UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
@@ -57,7 +55,7 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-//static void MX_USART2_UART_Init(void);
+void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 
@@ -98,10 +96,10 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-//  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-	/* la UART la inicializa el módulo API_uart*/
+	/* La UART la inicializa API_uart (vía API_port). CubeMX genera
+	 * MX_USART2_UART_Init() pero sin llamarla ("Do Not Generate Function Call"). */
 	if (!uartInit()) {
 		Error_Handler();
 	}
@@ -176,7 +174,7 @@ void SystemClock_Config(void)
   * @param None
   * @retval None
   */
-static void MX_USART2_UART_Init(void)
+void MX_USART2_UART_Init(void)
 {
 
   /* USER CODE BEGIN USART2_Init 0 */
@@ -186,18 +184,18 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 1 */
 
   /* USER CODE END USART2_Init 1 */
-//  huart2.Instance = USART2;
-//  huart2.Init.BaudRate = 115200;
-//  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-//  huart2.Init.StopBits = UART_STOPBITS_1;
-//  huart2.Init.Parity = UART_PARITY_NONE;
-//  huart2.Init.Mode = UART_MODE_TX_RX;
-//  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-//  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-//  if (HAL_UART_Init(&huart2) != HAL_OK)
-//  {
-//    Error_Handler();
-//  }
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */

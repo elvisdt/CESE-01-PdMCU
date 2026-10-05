@@ -12,11 +12,6 @@
 extern "C" {
 #endif
 
-#include "stm32f4xx_hal.h"
-#include <stdint.h>
-#include <stdbool.h>
-
-
 #include "API_common.h"
 
 typedef struct{
@@ -62,9 +57,5 @@ bool_t delayIsRunning(delay_t * delay);
 #ifdef __cplusplus
 }
 #endif
-
-
-#include <stdint.h>
-#include <stdbool.h>
 
 #endif /* API_API_DELAY_H_ */
