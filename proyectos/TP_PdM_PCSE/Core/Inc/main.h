@@ -53,6 +53,7 @@ extern "C" {
 void Error_Handler(void);
 void MX_USART2_UART_Init(void);
 void MX_I2C1_Init(void);
+void MX_TIM3_Init(void);
 
 /* USER CODE BEGIN EFP */
 
@@ -69,6 +70,8 @@ void MX_I2C1_Init(void);
 #define TCK_GPIO_Port GPIOA
 #define SWO_Pin GPIO_PIN_3
 #define SWO_GPIO_Port GPIOB
+#define ENC_SW_Pin GPIO_PIN_5
+#define ENC_SW_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

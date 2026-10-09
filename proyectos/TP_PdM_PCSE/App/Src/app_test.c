@@ -123,8 +123,9 @@ static int32_t total = 0;
 
 void appTestInit(void)
 {
-	print(encoderInit() ? "TEST_ENCODER: girar el encoder\r\n"
+	print(encoderInit() ? "TEST_ENCODER: girar el encoder y presionar su eje\r\n"
 	                    : "TEST_ENCODER: ERROR, habilitar TIM3 en CubeMX\r\n");
+	debounceFSM_init();
 }
 
 void appTestUpdate(void)
@@ -134,6 +135,11 @@ void appTestUpdate(void)
 		total += d;
 		snprintf(msg, sizeof(msg), "delta=%d total=%ld\r\n", d, (long)total);
 		print(msg);
+	}
+
+	debounceFSM_update();
+	if (readKey(BTN_ENC_SW)) {
+		print("SW presionado\r\n");
 	}
 }
 

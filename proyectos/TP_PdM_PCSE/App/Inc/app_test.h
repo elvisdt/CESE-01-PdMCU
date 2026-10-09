@@ -30,8 +30,11 @@ extern "C" {
 
 #ifndef APP_TEST
 // #define APP_TEST        TEST_DELAY
+
 //#define APP_TEST TEST_I2C_SCAN
-#define APP_TEST TEST_LCD
+// #define APP_TEST TEST_LCD
+
+#define APP_TEST TEST_ENCODER
 
 #endif
 
