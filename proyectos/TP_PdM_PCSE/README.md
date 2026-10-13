@@ -52,12 +52,11 @@ TP_PdM_PCSE/
 | TIM3 CH1 / CH2 | PA6 / PA7 | Combined Channels: Encoder Mode | — |
 | Encoder SW | PB5 | GPIO_Input, pull-up | `ENC_SW` |
 | Pulsador OK | PA10 | GPIO_Input, pull-up | `BTN_OK` |
-| Pulsador BACK | PB3 | GPIO_Input, pull-up | `BTN_BACK` |
+| Pulsador BACK | PB4 | GPIO_Input, pull-up | `BTN_BACK` |
 | Buzzer | PB10 | GPIO_Output | `BUZZER` |
 | LED alarma | PA5 | ya es LD2 | — |
 
-   - **PB3 es SWO**: en *System Core › SYS › Debug* dejar **Serial Wire** (sin trace),
-     o usar otro pin para BACK (p. ej. PB4).
+   - BACK va en **PB4** (no en PB3, que es el SWO del depurador).
    - En *Project Manager › Advanced Settings*, marcar **Do Not Generate Function Call**
      en `MX_USART2_UART_Init`, `MX_I2C1_Init` y `MX_TIM3_Init`: los inicializa `API_port`.
 3. *Generate Code*. Copia los drivers HAL/CMSIS que faltan (I2C, TIM).

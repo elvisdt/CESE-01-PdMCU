@@ -70,6 +70,7 @@ static void        uiSample(void);
 static void        uiRender(void);
 static void        uiLine(uint8_t row, const char *text);
 static float       uiValue(variable_t v);
+static void        uiLogAlarm(void);
 
 static cmdStatus_t cmdGet(uint8_t argc, char *argv[]);
 static cmdStatus_t cmdLim(uint8_t argc, char *argv[]);
@@ -109,6 +110,7 @@ void uiUpdate(void)
 
 	cmdPoll();
 	alarmTask();
+	uiLogAlarm();
 
 	switch (state) {
 	case UI_INIT:
@@ -209,6 +211,10 @@ static void uiEnter(uiState_t next)
 	if (next == UI_ERROR && state != UI_ERROR) {
 		uartSendString((uint8_t *)"ERROR: BME280 no responde, reintentando\r\n");
 	}
+	if (next != state) {
+		snprintf(msg, sizeof(msg), "UI: %s -> %s\r\n", stateName[state], stateName[next]);
+		uartSendString((uint8_t *)msg);
+	}
 	state = next;
 	note  = NULL;
 	dirty = true;
@@ -294,6 +300,21 @@ static void uiLine(uint8_t row, const char *text)
 	if (lcdSetCursor(row, 0) != LCD_OK || lcdPrint(padded) != LCD_OK) {
 		lcdOk = false;                          /* deja de usar el LCD */
 		uartSendString((uint8_t *)"AVISO: LCD dejo de responder\r\n");
+	}
+}
+
+/* Informa por UART cada cambio de estado de la alarma */
+static void uiLogAlarm(void)
+{
+	static const char *alarmLong[] = { "DISABLED", "ARMED", "ACTIVE" };
+	static alarmState_t last = ALARM_DISABLED;
+	alarmState_t now = alarmGetState();
+
+	if (now != last) {
+		snprintf(msg, sizeof(msg), "ALARMA: %s -> %s\r\n", alarmLong[last], alarmLong[now]);
+		uartSendString((uint8_t *)msg);
+		last  = now;
+		dirty = true;
 	}
 }
 

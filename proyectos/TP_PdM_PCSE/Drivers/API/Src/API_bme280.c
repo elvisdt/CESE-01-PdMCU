@@ -29,6 +29,7 @@
 #define DATA_LEN          8U
 
 #define RESET_CMD         0xB6U
+#define ADC_SKIPPED       0x80000      /* valor de reset de los registros de dato */
 #define STATUS_IM_UPDATE  0x01U
 
 /* Configuración: oversampling x1 en las tres, modo normal, t_sb 1000 ms */
@@ -136,6 +137,14 @@ bme280Status_t bme280Read(bme280Data_t *data)
 	int32_t adcP = (int32_t)(((uint32_t)raw[0] << 12) | ((uint32_t)raw[1] << 4) | ((uint32_t)raw[2] >> 4));
 	int32_t adcT = (int32_t)(((uint32_t)raw[3] << 12) | ((uint32_t)raw[4] << 4) | ((uint32_t)raw[5] >> 4));
 	int32_t adcH = (int32_t)(((uint32_t)raw[6] << 8)  |  (uint32_t)raw[7]);
+
+	/* Si el sensor se reinició (corte de alimentación) vuelve a modo sleep y
+	 * sus registros quedan en 0x80000: no hay medición válida, hay que
+	 * llamar de nuevo a bme280Init(). */
+	if (adcT == ADC_SKIPPED || adcP == ADC_SKIPPED) {
+		ready = false;
+		return BME280_ERR_NOT_INIT;
+	}
 
 	/* la temperatura va primero: calcula tFine que usan P y H */
 	data->temperature = (float)bme280CompensateT(adcT) / 100.0f;        /* 0.01 °C      */

@@ -33,6 +33,10 @@
 #define PORT_ENC_INSTANCE    TIM3
 #define PORT_ENC_FILTER      0x0FU
 
+/* Nivel que enciende el buzzer: 1 para buzzer activo directo o con transistor
+ * NPN; 0 para módulos que se activan en bajo (algunos de 3 pines). */
+#define PORT_BUZZER_ACTIVE_HIGH  1
+
 /* Pines de la aplicación: si todavía no existen los labels en CubeMX,
  * el pulsador OK cae en B1 (pulsador azul) para poder probar desde ya. */
 #if !defined(BTN_OK_Pin)
@@ -91,7 +95,8 @@ bool portLedRead(void)
 void portBuzzerWrite(bool on)
 {
 #if defined(BUZZER_Pin)
-	HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, on ? GPIO_PIN_SET : GPIO_PIN_RESET);
+	bool level = (PORT_BUZZER_ACTIVE_HIGH != 0) ? on : !on;
+	HAL_GPIO_WritePin(BUZZER_GPIO_Port, BUZZER_Pin, level ? GPIO_PIN_SET : GPIO_PIN_RESET);
 #else
 	(void)on;          /* pin aún no configurado en CubeMX */
 #endif

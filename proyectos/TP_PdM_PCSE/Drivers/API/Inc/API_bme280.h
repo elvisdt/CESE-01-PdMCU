@@ -32,7 +32,7 @@ typedef enum {
 	BME280_ERR_PORT,     /* el bus no respondió                    */
 	BME280_ERR_ID,       /* respondió pero no es un BME280 (0x60)  */
 	BME280_ERR_PARAM,    /* puntero NULL                           */
-	BME280_ERR_NOT_INIT  /* se llamó a bme280Read() sin bme280Init() */
+	BME280_ERR_NOT_INIT  /* sin bme280Init() o el sensor se reinició: volver a iniciar */
 } bme280Status_t;
 
 /** @brief Verifica el chip ID, lee la calibración y arranca el modo normal. */

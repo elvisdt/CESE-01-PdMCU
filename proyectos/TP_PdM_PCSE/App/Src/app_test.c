@@ -232,7 +232,10 @@ void appTestUpdate(void)
 			snprintf(msg, sizeof(msg), "T=%s C  H=%s %%  P=%s hPa\r\n", t, h, p);
 			print(msg);
 		} else {
-			print("ERROR: bme280Read()\r\n");
+			print("ERROR: bme280Read(), reinicializando el sensor\r\n");
+			if (bme280Init() == BME280_OK) {
+				print("BME280 reinicializado\r\n");
+			}
 		}
 	}
 }
