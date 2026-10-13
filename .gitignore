@@ -65,3 +65,9 @@ Thumbs.db
 
 # Notas locales (no versionar)
 docs/private/
+
+# Documentación generada por Doxygen
+**/docs/doxygen/
+
+# Material privado (pautas del curso, borradores)
+**/docs/file/

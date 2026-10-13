@@ -24,7 +24,6 @@ typedef struct{
  * @brief  Inicializa el retardo con una duración (ms) y lo deja detenido.
  * @param  delay: puntero a la estructura delay_t
  * @param  duration: duración en milisegundos
- * @retval None
  */
 void delayInit( delay_t * delay, tick_t duration );
 
@@ -39,7 +38,6 @@ bool_t delayRead( delay_t * delay );
  * @brief  Cambia la duración del retardo, solo si no está corriendo.
  * @param  delay: puntero a la estructura delay_t
  * @param  duration: nueva duración en milisegundos
- * @retval None
  */
 void delayWrite( delay_t * delay, tick_t duration );
 
