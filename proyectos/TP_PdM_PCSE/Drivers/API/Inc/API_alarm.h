@@ -6,6 +6,8 @@
  *
  *  MEF de alarma: DISABLED -> ARMED -> ACTIVE.
  *   - alarmUpdate(): evalúa cada nueva medición contra sus límites.
+ *     Solo temperatura y humedad tienen límites; la presión se muestra
+ *     pero no dispara la alarma.
  *   - alarmTask():   maneja LED y buzzer (no bloqueante, llamar en cada vuelta).
  */
 
@@ -20,7 +22,7 @@ extern "C" {
 #include "API_bme280.h"
 
 typedef enum { ALARM_DISABLED = 0, ALARM_ARMED, ALARM_ACTIVE } alarmState_t;
-typedef enum { VAR_TEMP = 0, VAR_HUM, VAR_PRESS, VAR_COUNT } variable_t;
+typedef enum { VAR_TEMP = 0, VAR_HUM, VAR_COUNT } variable_t;   /* variables con límites */
 typedef struct { float min; float max; } limits_t;
 
 void         alarmInit(void);                                      /* DISABLED, límites por defecto */

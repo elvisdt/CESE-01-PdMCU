@@ -28,6 +28,7 @@
 #define CMD_ENTRY_MODE    0x04U
 #define CMD_DISPLAY_CTRL  0x08U
 #define CMD_FUNCTION_SET  0x20U
+#define CMD_SET_CGRAM     0x40U
 #define CMD_SET_DDRAM     0x80U
 
 #define ENTRY_INCREMENT   0x02U
@@ -148,6 +149,22 @@ lcdStatus_t lcdCursor(bool_t on)
 		cmd |= CURSOR_ON | CURSOR_BLINK;
 	}
 	return lcdCommand(cmd);
+}
+
+lcdStatus_t lcdCreateChar(uint8_t slot, const uint8_t pattern[LCD_CHAR_ROWS])
+{
+	if (pattern == NULL || slot >= LCD_CUSTOM_CHARS) {
+		return LCD_ERR_PARAM;
+	}
+	if (!lcdReady) {
+		return LCD_ERR_NOT_INIT;
+	}
+	/* cada caracter ocupa 8 bytes de CGRAM a partir de slot * 8 */
+	lcdStatus_t st = lcdCommand((uint8_t)(CMD_SET_CGRAM | (slot << 3)));
+	for (uint8_t i = 0; (i < LCD_CHAR_ROWS) && (st == LCD_OK); i++) {
+		st = lcdSendByte((uint8_t)(pattern[i] & 0x1FU), true);
+	}
+	return st;
 }
 
 /* Private functions ---------------------------------------------------------*/

@@ -4,8 +4,10 @@
  *  Created on: 24 sept 2026
  *      Author: elvisdt
  *
- *  UART de consola en modo polling. Portable: el acceso al periférico
- *  lo resuelve API_port (formato fijo 8N1, sin control de flujo).
+ *  UART de consola. Portable: el acceso al periférico lo resuelve API_port
+ *  (formato fijo 8N1, sin control de flujo). La transmisión es por polling;
+ *  la recepción la guarda el port en un buffer por interrupción, así que
+ *  uartReceiveByte() no espera: devuelve lo que ya llegó.
  */
 
 #include "API_uart.h"
@@ -16,7 +18,8 @@
 
 /* Private defines -----------------------------------------------------------*/
 #define UART_TX_TIMEOUT_MS   1000U
-#define UART_RX_TIMEOUT_MS   10U
+#define UART_RX_TIMEOUT_MS   10U     /* uartReceiveStringSize()          */
+#define UART_RX_BYTE_WAIT_MS 0U      /* uartReceiveByte(): no bloquea el lazo */
 #define UART_CFG_MSG_LEN     256U
 
 /* Private variables ---------------------------------------------------------*/
@@ -91,7 +94,7 @@ bool_t uartReceiveByte(uint8_t * pbyte)
 		return false;
 	}
 
-	port_status_t st = portUartRead(pbyte, 1U, UART_RX_TIMEOUT_MS);
+	port_status_t st = portUartRead(pbyte, 1U, UART_RX_BYTE_WAIT_MS);
 
 	if (st == PORT_BUSY) {
 		Error_API_Handler();

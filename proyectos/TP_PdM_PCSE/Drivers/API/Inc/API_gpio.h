@@ -4,7 +4,7 @@
  *  Created on: 1 oct 2026
  *      Author: elvisdt
  *
- *  Salidas de la aplicación: LED de alarma (LD2, PA5) y buzzer (PB10).
+ *  Salidas de la aplicación: LED de alarma (LD2, PA5) y buzzer (PA10).
  *  Los pulsadores se leen en API_debounce.
  *  Portable: el acceso al hardware lo resuelve API_port.
  */

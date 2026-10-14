@@ -15,6 +15,10 @@
  *  USART2, I2C1 y TIM3 se configuran en CubeMX con "Do Not Generate Function
  *  Call": el init lo hace este archivo con sus propios handles.
  *
+ *  La recepción de la UART es por interrupción (USART2_IRQHandler está en
+ *  este archivo): en CubeMX NO hay que habilitar "USART2 global interrupt",
+ *  porque generaría otro USART2_IRQHandler en stm32f4xx_it.c.
+ *
  *  Mientras un periférico no esté habilitado en CubeMX, sus funciones
  *  compilan igual y devuelven error (ver #ifdef HAL_xxx_MODULE_ENABLED).
  */
@@ -26,6 +30,9 @@
 
 /* Private defines -----------------------------------------------------------*/
 #define PORT_UART_INSTANCE   USART2
+#define PORT_UART_IRQN       USART2_IRQn
+#define PORT_UART_IRQ_PRIO   5U
+#define PORT_UART_RX_SIZE    64U      /* bytes que se pueden recibir sin leerlos */
 #define PORT_I2C_INSTANCE    I2C1
 #define PORT_I2C_SPEED_HZ    100000U
 #define PORT_I2C_TRIALS      2U
@@ -46,6 +53,13 @@
 
 /* Private variables ---------------------------------------------------------*/
 static UART_HandleTypeDef portUart;
+
+/* Buffer circular de recepción: lo llena la interrupción y lo vacía
+ * portUartRead(). Un solo productor y un solo consumidor con índices de
+ * 8 bits, así que no hace falta deshabilitar interrupciones. */
+static volatile uint8_t uartRxBuf[PORT_UART_RX_SIZE];
+static volatile uint8_t uartRxHead = 0U;   /* próxima posición a escribir (ISR)  */
+static volatile uint8_t uartRxTail = 0U;   /* próxima posición a leer (lazo)     */
 #ifdef HAL_I2C_MODULE_ENABLED
 static I2C_HandleTypeDef  portI2c;
 #endif
@@ -134,11 +148,25 @@ bool portUartInit(uint32_t baudrate)
 	portUart.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
 	portUart.Init.OverSampling = UART_OVERSAMPLING_16;
 
-	return (HAL_UART_Init(&portUart) == HAL_OK);
+	if (HAL_UART_Init(&portUart) != HAL_OK) {
+		return false;
+	}
+
+	/* Por polling se pierden bytes cuando el lazo está ocupado (por ejemplo
+	 * escribiendo el LCD): el USART guarda uno solo. Con la interrupción de
+	 * RXNE cada byte va al buffer apenas llega. */
+	uartRxHead = 0U;
+	uartRxTail = 0U;
+	HAL_NVIC_SetPriority(PORT_UART_IRQN, PORT_UART_IRQ_PRIO, 0U);
+	HAL_NVIC_EnableIRQ(PORT_UART_IRQN);
+	__HAL_UART_ENABLE_IT(&portUart, UART_IT_RXNE);
+	return true;
 }
 
 bool portUartDeInit(void)
 {
+	__HAL_UART_DISABLE_IT(&portUart, UART_IT_RXNE);
+	HAL_NVIC_DisableIRQ(PORT_UART_IRQN);
 	return (HAL_UART_DeInit(&portUart) == HAL_OK);
 }
 
@@ -156,7 +184,36 @@ port_status_t portUartRead(uint8_t *data, uint16_t size, uint32_t timeoutMs)
 	if (data == NULL) {
 		return PORT_ERROR;
 	}
-	return portFromHal(HAL_UART_Receive(&portUart, data, size, timeoutMs));
+
+	uint32_t start = HAL_GetTick();
+	uint16_t n = 0U;
+
+	while (n < size) {
+		if (uartRxTail != uartRxHead) {
+			data[n++]  = uartRxBuf[uartRxTail];
+			uartRxTail = (uint8_t)((uartRxTail + 1U) % PORT_UART_RX_SIZE);
+		} else if ((HAL_GetTick() - start) >= timeoutMs) {
+			return PORT_TIMEOUT;          /* con timeout 0 no espera nada */
+		}
+	}
+	return PORT_OK;
+}
+
+/* Interrupción de USART2: guarda el byte recibido en el buffer circular */
+void USART2_IRQHandler(void)
+{
+	uint32_t sr = portUart.Instance->SR;
+
+	if ((sr & (USART_SR_RXNE | USART_SR_ORE)) != 0U) {
+		/* leer DR baja RXNE y, después de leer SR, también ORE */
+		uint8_t byte = (uint8_t)(portUart.Instance->DR & 0xFFU);
+		uint8_t next = (uint8_t)((uartRxHead + 1U) % PORT_UART_RX_SIZE);
+
+		if (next != uartRxTail) {         /* si está lleno se descarta */
+			uartRxBuf[uartRxHead] = byte;
+			uartRxHead = next;
+		}
+	}
 }
 
 /* I2C -----------------------------------------------------------------------*/

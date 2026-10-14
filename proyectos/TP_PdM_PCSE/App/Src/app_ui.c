@@ -6,19 +6,27 @@
  *
  *  MEF de interfaz de usuario:
  *
- *    UI_INIT ──(sensor OK)──> UI_SHOW ──OK──> UI_SET_MIN ──OK──> UI_SET_MAX
- *       │                      ▲  ▲  │          │ ▲                │   │
- *       │                      │  │  │          └─┼─BACK──> SHOW   │   │
- *       │                      │  │  │            └──────BACK──────┘   │
- *       │                      │  └──┼──────OK [mín < máx] / guarda───┘
+ *    UI_INIT ──(sensor OK)──> UI_SHOW ──OK──> UI_SEL_VAR ──OK──> UI_SET_MIN ──OK──> UI_SET_MAX
+ *       │                     ▲ ▲  ▲            │                  │                  │  │
+ *       │                     │ │  └───BACK─────┘                  │                  │  │
+ *       │                     │ │                 UI_SEL_VAR <─BACK┘   UI_SET_MIN <─BACK┘  │
+ *       │                     │ └──────────────OK [mín < máx] / guarda────────────────────┘
  *       └─(sensor falla)──> UI_ERROR <─(falla I2C desde cualquier estado)
  *                              └──(lectura OK)──> UI_SHOW
+ *
+ *  Pantalla principal (UI_SHOW):
+ *    fila 1: temperatura y humedad, siempre ("T:24.8°C H: 55%").
+ *    fila 2: presión, y en la última columna un ícono con el estado de la
+ *            alarma (campana llena / vacía, ver app_icons.h). Con la alarma
+ *            disparada muestra qué variable está fuera de rango y la campana
+ *            parpadea.
  *
  *  Medición, alarma y consola corren en todos los estados.
  */
 
 #include "app_ui.h"
 #include "app_fmt.h"
+#include "app_icons.h"
 
 #include "API_delay.h"
 #include "API_debounce.h"
@@ -37,40 +45,48 @@
 #define UI_SAMPLE_MS   1000U
 #define UI_RETRY_MS    2000U
 #define UI_RENDER_MS   200U
-#define UI_START_MS    500U    /* LCD encendido antes de arrancar el sensor */
+#define UI_SPLASH_MS   1500U   /* pantalla de bienvenida antes de arrancar el sensor */
+#define UI_BLINK_MS    500U    /* parpadeo de la campana con la alarma disparada     */
+#define UI_NOTE_TICKS  5U      /* refrescos que dura un mensaje corto (~1 s)         */
 #define UI_LINE_LEN    (LCD_COLS + 1U)
 #define UI_MSG_LEN     96U
 
+#define LCD_DEGREE     "\xDF"  /* símbolo ° en la ROM del HD44780 */
+
 /* Private variables ---------------------------------------------------------*/
-static const char  *varName[VAR_COUNT]   = { "Temp", "Hum", "Pres" };
-static const char  *varUnit[VAR_COUNT]   = { "C", "%", "hPa" };
-static const char   varLetter[VAR_COUNT] = { 'T', 'H', 'P' };
-static const float  varStep[VAR_COUNT]   = { 0.5f, 1.0f, 1.0f };
-static const char  *alarmName[]          = { "OFF", "ARM", "ALR" };
-static const char  *stateName[]          = { "INIT", "SHOW", "SET_MIN", "SET_MAX", "ERROR" };
+static const char  *varName[VAR_COUNT]   = { "Temperatura", "Humedad" };
+static const char  *varUnit[VAR_COUNT]   = { "C", "%" };
+static const char   varLetter[VAR_COUNT] = { 'T', 'H' };
+static const float  varStep[VAR_COUNT]   = { 0.5f, 1.0f };
+static const char  *alarmLong[]          = { "DISABLED", "ARMED", "ACTIVE" };
+static const char  *stateName[]          = { "INIT", "SHOW", "SEL_VAR", "SET_MIN", "SET_MAX", "ERROR" };
 
 static uiState_t    state = UI_INIT;
-static variable_t   sel   = VAR_TEMP;
-static limits_t     edit;                /* límites en edición             */
+static variable_t   sel   = VAR_TEMP;    /* variable cuyos límites se editan */
+static limits_t     edit;                /* límites en edición               */
 static bme280Data_t meas;
-static bool_t       measValid = false;
-static bool_t       lcdOk     = false;
-static bool_t       dirty     = true;    /* hay que redibujar el LCD      */
-static const char  *note      = NULL;    /* mensaje corto en la línea 2   */
-static uint8_t      noteTicks = 0;       /* refrescos que dura el mensaje */
+static bool_t       measValid  = false;
+static bool_t       lcdOk      = false;
+static bool_t       lcdStarted = false;  /* UI_INIT: primero LCD, después sensor */
+static bool_t       dirty      = true;   /* hay que redibujar el LCD         */
+static const char  *note       = NULL;   /* mensaje corto en la fila 2       */
+static uint8_t      noteTicks  = 0;
 
 static delay_t dSample;
 static delay_t dRetry;
 static delay_t dRender;
-static delay_t dStart;
-static bool_t  lcdStarted = false;   /* UI_INIT: primero LCD, después sensor */
+static delay_t dSplash;
 
 static char msg[UI_MSG_LEN];
 
 /* Private function prototypes -----------------------------------------------*/
 static void        uiEnter(uiState_t next);
+static void        uiNote(const char *text);
 static void        uiSample(void);
 static void        uiRender(void);
+static void        uiRenderShow(char *l0, char *l1);
+static void        uiAlarmText(char *buf, size_t len);
+static void        uiLoadIcons(void);
 static void        uiLine(uint8_t row, const char *text);
 static float       uiValue(variable_t v);
 static void        uiLogAlarm(void);
@@ -83,8 +99,8 @@ static cmdStatus_t cmdStatus(uint8_t argc, char *argv[]);
 
 static const cmdEntry_t uiCommands[] = {
 	{ "GET",    0, 0, cmdGet,    "GET                  mediciones actuales" },
-	{ "LIM?",   0, 0, cmdLim,    "LIM?                 limites de alarma" },
-	{ "SET",    3, 3, cmdSet,    "SET <T|H|P> <min> <max>" },
+	{ "LIM?",   0, 0, cmdLim,    "LIM?                 limites de alarma (T y H)" },
+	{ "SET",    3, 3, cmdSet,    "SET <T|H> <min> <max>" },
 	{ "ALARM",  1, 1, cmdAlarm,  "ALARM <ON|OFF>" },
 	{ "STATUS", 0, 0, cmdStatus, "STATUS               estado de la MEF y la alarma" },
 };
@@ -99,7 +115,7 @@ void uiInit(void)
 	delayInit(&dSample, UI_SAMPLE_MS);
 	delayInit(&dRetry, UI_RETRY_MS);
 	delayInit(&dRender, UI_RENDER_MS);
-	delayInit(&dStart, UI_START_MS);
+	delayInit(&dSplash, UI_SPLASH_MS);
 	lcdStarted = false;
 	state = UI_INIT;
 }
@@ -119,8 +135,9 @@ void uiUpdate(void)
 
 	switch (state) {
 	case UI_INIT:
-		/* Paso 1: bus, encoder y LCD. Se muestra "Iniciando..." enseguida. */
+		/* Paso 1: bus, encoder y LCD con la pantalla de bienvenida */
 		if (!lcdStarted) {
+			uartSendString((uint8_t *)"\r\nEstacion ambiental - TP PdM\r\n");
 			if (!portI2cInit()) {
 				uartSendString((uint8_t *)"ERROR: bus I2C\r\n");
 			}
@@ -128,15 +145,18 @@ void uiUpdate(void)
 				uartSendString((uint8_t *)"AVISO: encoder no inicializado\r\n");
 			}
 			lcdOk = (lcdInit() == LCD_OK);
+			if (lcdOk) {
+				uiLoadIcons();
+			}
 			uartSendString(lcdOk ? (uint8_t *)"LCD OK\r\n"
 			                     : (uint8_t *)"AVISO: LCD no responde, sigo solo por UART\r\n");
 			lcdStarted = true;
 			dirty      = true;
-			delayRead(&dStart);                  /* arranca la espera */
+			delayRead(&dSplash);                 /* arranca la espera */
 			break;
 		}
-		/* Paso 2: pasado UI_START_MS, el sensor y la primera lectura */
-		if (!delayRead(&dStart)) {
+		/* Paso 2: pasada la bienvenida, el sensor y la primera lectura */
+		if (!delayRead(&dSplash)) {
 			break;
 		}
 		if (bme280Init() == BME280_OK) {
@@ -151,18 +171,26 @@ void uiUpdate(void)
 		break;
 
 	case UI_SHOW:
-		if (steps != 0) {
-			int16_t s = (int16_t)(((int16_t)sel + steps) % (int16_t)VAR_COUNT);
-			sel = (variable_t)((s < 0) ? s + (int16_t)VAR_COUNT : s);
-			dirty = true;
-		}
 		if (swKey) {
 			alarmToggle();
+			uiNote((alarmGetState() == ALARM_DISABLED) ? "Alarma OFF" : "Alarma ON");
+		}
+		if (okKey) {
+			uiEnter(UI_SEL_VAR);
+		}
+		break;
+
+	case UI_SEL_VAR:
+		if (steps != 0) {
+			int16_t s = (int16_t)(((int16_t)sel + steps) % (int16_t)VAR_COUNT);
+			sel   = (variable_t)((s < 0) ? s + (int16_t)VAR_COUNT : s);
 			dirty = true;
 		}
 		if (okKey) {
 			edit = alarmGetLimits(sel);
 			uiEnter(UI_SET_MIN);
+		} else if (backKey) {
+			uiEnter(UI_SHOW);
 		}
 		break;
 
@@ -174,23 +202,22 @@ void uiUpdate(void)
 		if (okKey) {
 			uiEnter(UI_SET_MAX);
 		} else if (backKey) {
-			uiEnter(UI_SHOW);                    /* descarta */
+			uiEnter(UI_SEL_VAR);                 /* descarta */
 		}
 		break;
 
 	case UI_SET_MAX:
 		if (steps != 0) {
 			edit.max += (float)steps * varStep[sel];
-			note = NULL;
+			note  = NULL;
 			dirty = true;
 		}
 		if (okKey) {
 			if (alarmSetLimits(sel, edit.min, edit.max)) {
 				uiEnter(UI_SHOW);
-				note      = "Guardado";
-				noteTicks = 5U;                  /* ~1 s */
+				uiNote("Guardado");
 			} else {
-				note = "Rango invalido";     /* min >= max o fuera del sensor */
+				note  = "Rango invalido";        /* min >= max o fuera del sensor */
 				dirty = true;
 			}
 		} else if (backKey) {
@@ -240,6 +267,14 @@ static void uiEnter(uiState_t next)
 	dirty = true;
 }
 
+/* Mensaje corto en la fila 2 de UI_SHOW durante ~1 s */
+static void uiNote(const char *text)
+{
+	note      = text;
+	noteTicks = UI_NOTE_TICKS;
+	dirty     = true;
+}
+
 static void uiSample(void)
 {
 	if (bme280Read(&meas) == BME280_OK) {
@@ -257,7 +292,6 @@ static void uiRender(void)
 	char l0[UI_LINE_LEN];
 	char l1[UI_LINE_LEN];
 	char a[8];
-	char b[8];
 
 	dirty = false;
 	if (!lcdOk) {
@@ -266,35 +300,24 @@ static void uiRender(void)
 
 	switch (state) {
 	case UI_SHOW:
-		if (measValid) {
-			fmtFloat1(a, sizeof(a), uiValue(sel));
-		} else {
-			snprintf(a, sizeof(a), "--.-");
-		}
-		snprintf(l0, sizeof(l0), "%-4s%7s %-3s%c", varName[sel], a, varUnit[sel],
-				alarmIsOutOfRange(sel) ? '!' : ' ');
-		fmtFloat1(a, sizeof(a), alarmGetLimits(sel).min);
-		fmtFloat1(b, sizeof(b), alarmGetLimits(sel).max);
-		if (note != NULL && noteTicks > 0U) {
-			snprintf(l1, sizeof(l1), "%s", note);
-			noteTicks--;
-			dirty = true;                       /* sigue refrescando hasta que venza */
-		} else {
-			note = NULL;
-			snprintf(l1, sizeof(l1), "%s-%s %s", a, b, alarmName[alarmGetState()]);
-		}
+		uiRenderShow(l0, l1);
+		break;
+
+	case UI_SEL_VAR:
+		snprintf(l0, sizeof(l0), "Editar limites");
+		snprintf(l1, sizeof(l1), "> %s", varName[sel]);
 		break;
 
 	case UI_SET_MIN:
 		fmtFloat1(a, sizeof(a), edit.min);
-		snprintf(l0, sizeof(l0), "%s min: %s", varName[sel], a);
-		snprintf(l1, sizeof(l1), "OK sig BACK sale");
+		snprintf(l0, sizeof(l0), "%c min: %s %s", varLetter[sel], a, varUnit[sel]);
+		snprintf(l1, sizeof(l1), "OK sig BACK vol");
 		break;
 
 	case UI_SET_MAX:
 		fmtFloat1(a, sizeof(a), edit.max);
-		snprintf(l0, sizeof(l0), "%s max: %s", varName[sel], a);
-		snprintf(l1, sizeof(l1), "%s", (note != NULL) ? note : "OK guarda BACK");
+		snprintf(l0, sizeof(l0), "%c max: %s %s", varLetter[sel], a, varUnit[sel]);
+		snprintf(l1, sizeof(l1), "%s", (note != NULL) ? note : "OK guarda");
 		break;
 
 	case UI_ERROR:
@@ -302,14 +325,88 @@ static void uiRender(void)
 		snprintf(l1, sizeof(l1), "Reintentando...");
 		break;
 
-	default:
-		snprintf(l0, sizeof(l0), "Iniciando...");
-		l1[0] = '\0';
+	default:                                    /* UI_INIT: bienvenida */
+		snprintf(l0, sizeof(l0), "Est. ambiental");
+		snprintf(l1, sizeof(l1), "Iniciando...");
 		break;
 	}
 
 	uiLine(0, l0);
 	uiLine(1, l1);
+}
+
+/* Pantalla principal: T y H arriba, presión / alarma abajo */
+static void uiRenderShow(char *l0, char *l1)
+{
+	char t[8];
+
+	/* Humedad sin decimal: el sensor tiene ±3 %HR, el decimal no aporta
+	 * y así "T:-10.5°C H:100%" entra justo en 16 columnas. */
+	if (measValid) {
+		uint8_t h = (uint8_t)(meas.humidity + 0.5f);
+		fmtFloat1(t, sizeof(t), meas.temperature);
+		snprintf(l0, UI_LINE_LEN, "T:%.5s" LCD_DEGREE "C H:%3u%%", t, (unsigned)h);
+	} else {
+		snprintf(l0, UI_LINE_LEN, "T:--.-" LCD_DEGREE "C H: --%%");
+	}
+
+	if (note != NULL && noteTicks > 0U) {       /* mensaje corto: tiene prioridad */
+		snprintf(l1, UI_LINE_LEN, "%s", note);
+		noteTicks--;
+		dirty = true;                           /* sigue refrescando hasta que venza */
+		return;
+	}
+	note = NULL;
+
+	/* columnas 0..14: texto, columna 15: ícono de la alarma */
+	char text[LCD_COLS];
+	char icon;
+
+	switch (alarmGetState()) {
+	case ALARM_ACTIVE:
+		uiAlarmText(text, sizeof(text));
+		icon  = (((portGetTickMs() / UI_BLINK_MS) % 2U) == 0U) ? ICON_BELL : ' ';
+		dirty = true;                           /* sigue refrescando para parpadear */
+		break;
+	case ALARM_ARMED:
+		icon = ICON_BELL;
+		break;
+	default:
+		icon = ICON_BELL_OFF;
+		break;
+	}
+	if (alarmGetState() != ALARM_ACTIVE) {
+		fmtFloat1(t, sizeof(t), meas.pressure);
+		snprintf(text, sizeof(text), "P: %s hPa", measValid ? t : "--.-");
+	}
+	snprintf(l1, UI_LINE_LEN, "%-15.15s%c", text, icon);
+}
+
+/* Carga los íconos de app_icons.h en la CGRAM del LCD */
+static void uiLoadIcons(void)
+{
+	if (lcdCreateChar((uint8_t)ICON_BELL, iconBell) != LCD_OK ||
+	    lcdCreateChar((uint8_t)ICON_BELL_OFF, iconBellOff) != LCD_OK) {
+		uartSendString((uint8_t *)"AVISO: no se cargaron los iconos del LCD\r\n");
+	}
+}
+
+/* Qué variable disparó la alarma: "ALARMA T ALTA", "ALARMA T y H", ... */
+static void uiAlarmText(char *buf, size_t len)
+{
+	bool_t tOut = alarmIsOutOfRange(VAR_TEMP);
+	bool_t hOut = alarmIsOutOfRange(VAR_HUM);
+
+	if (tOut && hOut) {
+		snprintf(buf, len, "ALARMA T y H");
+	} else if (tOut || hOut) {
+		variable_t v  = tOut ? VAR_TEMP : VAR_HUM;
+		bool_t     hi = (uiValue(v) > alarmGetLimits(v).max);
+		snprintf(buf, len, "ALARMA %c %s", varLetter[v], hi ? "ALTA" : "BAJA");
+	} else {
+		/* volvió al rango pero todavía dentro de la histéresis */
+		snprintf(buf, len, "ALARMA activa");
+	}
 }
 
 /* Escribe una fila completa, rellenando con espacios para borrar lo anterior */
@@ -326,7 +423,6 @@ static void uiLine(uint8_t row, const char *text)
 /* Informa por UART cada cambio de estado de la alarma */
 static void uiLogAlarm(void)
 {
-	static const char *alarmLong[] = { "DISABLED", "ARMED", "ACTIVE" };
 	static alarmState_t last = ALARM_DISABLED;
 	alarmState_t now = alarmGetState();
 
@@ -340,11 +436,7 @@ static void uiLogAlarm(void)
 
 static float uiValue(variable_t v)
 {
-	switch (v) {
-	case VAR_TEMP: return meas.temperature;
-	case VAR_HUM:  return meas.humidity;
-	default:       return meas.pressure;
-	}
+	return (v == VAR_TEMP) ? meas.temperature : meas.humidity;
 }
 
 /* Comandos de consola -------------------------------------------------------*/
@@ -421,7 +513,6 @@ static cmdStatus_t cmdAlarm(uint8_t argc, char *argv[])
 
 static cmdStatus_t cmdStatus(uint8_t argc, char *argv[])
 {
-	static const char *alarmLong[] = { "DISABLED", "ARMED", "ACTIVE" };
 	(void)argc; (void)argv;
 
 	snprintf(msg, sizeof(msg), "UI=%s ALARM=%s LCD=%s\r\n",

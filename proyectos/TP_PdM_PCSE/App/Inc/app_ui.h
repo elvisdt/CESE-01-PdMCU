@@ -15,7 +15,7 @@
 extern "C" {
 #endif
 
-typedef enum { UI_INIT = 0, UI_SHOW, UI_SET_MIN, UI_SET_MAX, UI_ERROR } uiState_t;
+typedef enum { UI_INIT = 0, UI_SHOW, UI_SEL_VAR, UI_SET_MIN, UI_SET_MAX, UI_ERROR } uiState_t;
 
 void uiInit(void);     /* inicializa los módulos y la MEF de interfaz      */
 void uiUpdate(void);   /* sensor cada 1 s, alarma, consola y MEF (no bloquea) */

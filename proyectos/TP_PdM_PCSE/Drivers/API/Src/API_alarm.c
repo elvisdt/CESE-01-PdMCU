@@ -24,14 +24,12 @@ typedef struct {
 /* Private variables ---------------------------------------------------------*/
 static const varRange_t range[VAR_COUNT] = {
 	{ -40.0f,  85.0f,  0.5f },   /* temperatura °C */
-	{   0.0f, 100.0f,  2.0f },   /* humedad %HR    */
-	{ 300.0f, 1100.0f, 1.0f }    /* presión hPa    */
+	{   0.0f, 100.0f,  2.0f }    /* humedad %HR    */
 };
 
 static limits_t limits[VAR_COUNT] = {
 	{  10.0f,   35.0f },
-	{  20.0f,   80.0f },
-	{ 950.0f, 1050.0f }
+	{  20.0f,   80.0f }
 };
 
 static alarmState_t state = ALARM_DISABLED;
@@ -167,8 +165,7 @@ static float varValue(const bme280Data_t *d, variable_t v)
 {
 	switch (v) {
 	case VAR_TEMP:  return d->temperature;
-	case VAR_HUM:   return d->humidity;
-	default:        return d->pressure;
+	default:        return d->humidity;
 	}
 }
 

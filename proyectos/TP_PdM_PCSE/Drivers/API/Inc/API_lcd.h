@@ -20,6 +20,8 @@ extern "C" {
 
 #define LCD_ROWS   2U
 #define LCD_COLS   16U
+#define LCD_CUSTOM_CHARS  8U   /* caracteres propios en CGRAM (códigos 0..7) */
+#define LCD_CHAR_ROWS     8U   /* filas de 5 puntos de cada caracter          */
 
 typedef enum {
 	LCD_OK = 0,
@@ -48,6 +50,15 @@ lcdStatus_t lcdPrint(const char *text);
 
 /** @brief Muestra u oculta el cursor parpadeante. */
 lcdStatus_t lcdCursor(bool_t on);
+
+/**
+ * @brief  Carga un caracter propio en la CGRAM del HD44780.
+ * @param  slot: 0..LCD_CUSTOM_CHARS-1. Después se imprime con el código slot
+ *         (conviene no usar el 0, que en un string de C es el fin de cadena).
+ * @param  pattern: LCD_CHAR_ROWS filas, los 5 bits bajos de cada una son los puntos.
+ * @note   Deja el cursor en la CGRAM: llamar a lcdSetCursor() antes de escribir texto.
+ */
+lcdStatus_t lcdCreateChar(uint8_t slot, const uint8_t pattern[LCD_CHAR_ROWS]);
 
 #ifdef __cplusplus
 }
