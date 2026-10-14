@@ -1,8 +1,8 @@
-/*
- * API_common.c
- *
- *  Created on: Sep 27, 2026
- *      Author: elvisdt
+/**
+ * @file    API_common.c
+ * @brief   Manejo de errores irrecuperables de los módulos API.
+ * @author  Elvis de la Torre
+ * @date    27 sept 2026
  */
 
 #include "API_common.h"

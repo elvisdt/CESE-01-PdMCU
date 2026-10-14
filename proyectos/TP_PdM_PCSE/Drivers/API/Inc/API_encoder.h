@@ -1,10 +1,13 @@
-/*
- * API_encoder.h
+/**
+ * @file    API_encoder.h
+ * @brief   Encoder rotativo KY-040.
+ * @author  Elvis de la Torre
+ * @date    4 oct 2026
  *
- *  Created on: 4 oct 2026
- *      Author: elvisdt
- *
- *  Encoder rotativo KY-040 leído por hardware (TIM3 en modo encoder).
+ * El conteo lo hace el hardware (TIM3 en modo encoder), así que no se
+ * pierden pasos aunque el lazo esté ocupado. Este módulo convierte las
+ * cuentas del timer en pasos del encoder, los "clics" que se sienten al
+ * girarlo.
  */
 
 #ifndef API_INC_API_ENCODER_H_
@@ -17,14 +20,14 @@ extern "C" {
 #include "API_common.h"
 
 /**
- * @brief  Arranca el timer en modo encoder.
- * @retval true si se inicializó correctamente.
+ * @brief  Arranca el conteo.
+ * @return false si el timer no se pudo iniciar.
  */
-bool_t  encoderInit(void);
+bool_t encoderInit(void);
 
 /**
- * @brief  Pasos (detents) girados desde la última llamada.
- * @retval > 0 sentido horario, < 0 antihorario, 0 sin movimiento.
+ * @brief  Pasos girados desde la llamada anterior.
+ * @return Positivo en un sentido, negativo en el otro, 0 si no se movió.
  */
 int16_t encoderGetDelta(void);
 

@@ -1,11 +1,10 @@
-/*
- * API_bme280_port.c
+/**
+ * @file    API_bme280_port.c
+ * @brief   Port del BME280 para la NUCLEO-F446RE: bus I2C1.
+ * @author  Elvis de la Torre
+ * @date    5 oct 2026
  *
- *  Created on: 5 oct 2026
- *      Author: elvisdt
- *
- *  Port del BME280 para NUCLEO-F446RE: bus I2C1 compartido con el LCD,
- *  manejado por API_port.
+ * El bus lo comparte con el LCD y lo maneja API_port.
  */
 
 #include "API_bme280_port.h"
@@ -13,6 +12,7 @@
 
 #include <stddef.h>
 
+/* La lectura más larga son 26 bytes de calibración: unos 3 ms a 100 kHz. */
 #define BME280_I2C_TIMEOUT_MS   10U
 
 bool_t bme280PortInit(void)

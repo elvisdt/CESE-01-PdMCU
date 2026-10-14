@@ -1,11 +1,11 @@
-/*
- * app_ui.h
+/**
+ * @file    app_ui.h
+ * @brief   Aplicación de la estación: interfaz de usuario y consola.
+ * @author  Elvis de la Torre
+ * @date    4 oct 2026
  *
- *  Created on: 4 oct 2026
- *      Author: elvisdt
- *
- *  MEF de interfaz de usuario: integra sensor, LCD, encoder, pulsadores,
- *  alarma y consola. main.c solo llama a uiInit() y uiUpdate().
+ * Reúne todos los módulos. main.c solo llama a uiInit() una vez y a
+ * uiUpdate() en cada vuelta del lazo.
  */
 
 #ifndef APP_INC_APP_UI_H_
@@ -15,10 +15,16 @@
 extern "C" {
 #endif
 
-typedef enum { UI_INIT = 0, UI_SHOW, UI_SEL_VAR, UI_SET_MIN, UI_SET_MAX, UI_ERROR } uiState_t;
+/** @brief Inicializa los módulos que no dependen del bus y deja la MEF en UI_INIT. */
+void uiInit(void);
 
-void uiInit(void);     /* inicializa los módulos y la MEF de interfaz      */
-void uiUpdate(void);   /* sensor cada 1 s, alarma, consola y MEF (no bloquea) */
+/**
+ * @brief Una vuelta de la aplicación. No bloquea.
+ *
+ * Lee los pulsadores y el encoder, atiende la consola, mide cada segundo,
+ * evalúa la alarma, avanza la MEF de interfaz y redibuja el LCD si cambió algo.
+ */
+void uiUpdate(void);
 
 #ifdef __cplusplus
 }

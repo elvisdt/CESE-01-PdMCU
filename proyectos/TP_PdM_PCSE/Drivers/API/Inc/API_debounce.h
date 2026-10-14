@@ -1,11 +1,13 @@
-/*
- * API_debounce.h
+/**
+ * @file    API_debounce.h
+ * @brief   Antirrebote de los pulsadores (práctica 4).
+ * @author  Elvis de la Torre
+ * @date    17 sept 2026
  *
- *  Created on: 17 sept 2026
- *      Author: elvisdt
- *
- *  Antirrebote por MEF (práctica 4) adaptado a varios pulsadores:
- *  una instancia de la MEF por pulsador.
+ * Es la MEF de la práctica 4 con una instancia por pulsador. Cada una
+ * confirma el cambio solo si el pin sigue igual 40 ms después, y deja una
+ * marca que readKey() consume una vez. Mantener apretado un botón genera un
+ * solo evento.
  */
 
 #ifndef API_INC_API_DEBOUNCE_H_
@@ -17,29 +19,24 @@ extern "C" {
 
 #include "API_common.h"
 
-/* Pulsadores de la aplicación */
+/** @brief Pulsadores de la estación. */
 typedef enum {
-	BTN_OK = 0,
-	BTN_BACK,
-	BTN_ENC_SW,
-	BTN_COUNT
+	BTN_OK = 0,   /**< Confirmar (PB10). */
+	BTN_BACK,     /**< Volver (PB4). */
+	BTN_ENC_SW,   /**< Eje del encoder (PB5). */
+	BTN_COUNT     /**< Cantidad de pulsadores. */
 } button_t;
 
-/**
- * @brief  Carga el estado inicial (BUTTON_UP) de la MEF de cada pulsador.
- */
+/** @brief Deja todas las MEF en BUTTON_UP. */
 void debounceFSM_init(void);
 
-/**
- * @brief  Lee los pines, resuelve la MEF de cada pulsador y actualiza sus flags.
- *         Llamar en cada vuelta del lazo principal.
- */
+/** @brief Lee los pines y avanza las MEF. Se llama en cada vuelta del lazo. */
 void debounceFSM_update(void);
 
 /**
- * @brief  Indica si hubo una pulsación confirmada. Se resetea al leerla.
- * @param  btn: pulsador a consultar.
- * @retval true si había una pulsación pendiente.
+ * @brief  Indica si hubo una pulsación confirmada y la consume.
+ * @param  btn Pulsador a consultar.
+ * @return true una sola vez por pulsación.
  */
 bool_t readKey(button_t btn);
 

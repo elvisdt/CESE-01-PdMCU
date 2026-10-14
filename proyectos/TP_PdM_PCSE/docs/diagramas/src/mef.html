@@ -1,0 +1,212 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  body { margin: 0; background: #fff; font-family: 'Inter', 'Segoe UI', Arial, sans-serif; }
+  svg { display: block; }
+  .name { font-weight: 700; font-size: 12.5px; fill: #1f2937; }
+  .out  { font-size: 11px; fill: #374151; }
+  .lbl  { font-size: 12px; fill: #1f2937; }
+  .title { font-size: 15px; font-weight: 700; fill: #111827; }
+  .group { font-size: 12px; fill: #6b7280; font-style: italic; }
+  .legend { font-size: 11.5px; fill: #4b5563; }
+  .sub { font-size: 12px; fill: #6b7280; }
+</style></head>
+<body>
+<div id="ui"></div>
+<div id="alarm"></div>
+<div id="deb"></div>
+<div id="cmd"></div>
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const R = 66;
+const PAL = {
+  init:   { fill: '#e5e7eb', stroke: '#6b7280' },
+  main:   { fill: '#b9e6e6', stroke: '#2a8f8f' },
+  config: { fill: '#fde7b0', stroke: '#c58b12' },
+  error:  { fill: '#f8c9c9', stroke: '#c0392b' },
+  ok:     { fill: '#cdebc9', stroke: '#3c8d3a' },
+  idle:   { fill: '#dde4ee', stroke: '#5b6b82' },
+  wait:   { fill: '#fde7b0', stroke: '#c58b12' },
+  down:   { fill: '#cfe0fb', stroke: '#2f6bd1' },
+};
+function el(tag, attrs, parent, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function makeSvg(id, w, h, title) {
+  const svg = el('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
+  document.getElementById(id).appendChild(svg);
+  const defs = el('defs', {}, svg);
+  const m = el('marker', { id: id + '-arr', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 8, markerHeight: 8, orient: 'auto-start-reverse' }, defs);
+  el('path', { d: 'M0 0 L10 5 L0 10 z', fill: '#374151' }, m);
+  if (title) el('text', { x: w / 2, y: 28, 'text-anchor': 'middle', class: 'title' }, svg, title);
+  svg._id = id;
+  svg._edges = el('g', {}, svg);
+  svg._nodes = el('g', {}, svg);
+  svg._labels = el('g', {}, svg);
+  return svg;
+}
+function state(svg, x, y, name, kind, out) {
+  const p = PAL[kind];
+  const g = el('g', {}, svg._nodes);
+  el('circle', { cx: x, cy: y, r: R, fill: p.fill, stroke: p.stroke, 'stroke-width': 2 }, g);
+  el('text', { x, y: out ? y - 2 : y + 4.5, 'text-anchor': 'middle', class: 'name' }, g, name);
+  if (out) {
+    el('line', { x1: x - 38, x2: x + 38, y1: y + 8, y2: y + 8, stroke: p.stroke, 'stroke-width': 1, opacity: 0.6 }, g);
+    el('text', { x, y: y + 24, 'text-anchor': 'middle', class: 'out' }, g, out);
+  }
+  return { x, y };
+}
+function label(svg, x, y, text, anchor = 'middle') {
+  const lines = text.split('\n');
+  const g = el('g', {}, svg._labels);
+  lines.forEach((l, i) => {
+    const t = el('text', { x, y: y + i * 15, 'text-anchor': anchor, class: 'lbl' }, g, l);
+  });
+  // white halo behind text
+  requestAnimationFrame(() => {
+    const bb = g.getBBox();
+    const r = el('rect', { x: bb.x - 3, y: bb.y - 1, width: bb.width + 6, height: bb.height + 2, fill: '#fff', opacity: 0.92, rx: 3 });
+    g.insertBefore(r, g.firstChild);
+  });
+}
+// Curved edge from a to b; bend > 0 curves to the left of the direction a->b
+function edge(svg, a, b, text, bend = 0.25, lpos = null, anchor = 'middle') {
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+  const nx = -dy / d, ny = dx / d;
+  const mx = (a.x + b.x) / 2 + nx * bend * d, my = (a.y + b.y) / 2 + ny * bend * d;
+  const pa = toward(a, mx, my, R), pb = toward(b, mx, my, R + 2);
+  el('path', { d: `M${pa.x} ${pa.y} Q${mx} ${my} ${pb.x} ${pb.y}`, fill: 'none', stroke: '#374151', 'stroke-width': 1.6, 'marker-end': `url(#${svg._id}-arr)` }, svg._edges);
+  const lx = 0.25 * pa.x + 0.5 * mx + 0.25 * pb.x, ly = 0.25 * pa.y + 0.5 * my + 0.25 * pb.y;
+  if (text) {
+    const p = lpos ? (Array.isArray(lpos) ? { x: lx + lpos[0], y: ly + lpos[1] } : lpos) : { x: lx, y: ly - 6 };
+    label(svg, p.x, p.y, text, anchor);
+  }
+}
+function toward(c, x, y, r) { const dx = x - c.x, dy = y - c.y, d = Math.hypot(dx, dy); return { x: c.x + dx / d * r, y: c.y + dy / d * r }; }
+// Self loop at angle (deg, 0 = right, -90 = up)
+function loop(svg, c, ang, text, lpos = [0, 0], anchor = 'middle') {
+  const a = ang * Math.PI / 180, s = 0.38;
+  const p1 = { x: c.x + R * Math.cos(a - s), y: c.y + R * Math.sin(a - s) };
+  const p2 = { x: c.x + (R + 2) * Math.cos(a + s), y: c.y + (R + 2) * Math.sin(a + s) };
+  const k = R + 62;
+  const c1 = { x: c.x + k * Math.cos(a - 0.55), y: c.y + k * Math.sin(a - 0.55) };
+  const c2 = { x: c.x + k * Math.cos(a + 0.55), y: c.y + k * Math.sin(a + 0.55) };
+  el('path', { d: `M${p1.x} ${p1.y} C${c1.x} ${c1.y} ${c2.x} ${c2.y} ${p2.x} ${p2.y}`, fill: 'none', stroke: '#374151', 'stroke-width': 1.6, 'marker-end': `url(#${svg._id}-arr)` }, svg._edges);
+  const tip = { x: c.x + (R + 52) * Math.cos(a), y: c.y + (R + 52) * Math.sin(a) };
+  label(svg, tip.x + lpos[0], tip.y + lpos[1], text, anchor);
+}
+function start(svg, x, y, to, text = 'Reset') {
+  el('circle', { cx: x, cy: y, r: 9, fill: '#1f2937' }, svg._nodes);
+  const pb = toward(to, x, y, R + 2);
+  el('path', { d: `M${x + 9} ${y} L${pb.x} ${pb.y}`, stroke: '#374151', 'stroke-width': 1.6, 'marker-end': `url(#${svg._id}-arr)` }, svg._edges);
+  label(svg, x, y - 18, text);
+}
+
+
+function legend(svg, x, y, text) {
+  el('text', { x, y, class: 'legend' }, svg._labels, text);
+}
+function subtitle(svg, w, text) {
+  el('text', { x: w / 2, y: 48, 'text-anchor': 'middle', class: 'sub' }, svg, text);
+}
+
+/* ---------- MEF de interfaz de usuario ---------- */
+{
+  const W = 1240, H = 740;
+  const s = makeSvg('ui', W, H, 'MEF de interfaz de usuario (app_ui)');
+  subtitle(s, W, 'Mealy: las acciones ocurren en las transiciones');
+  el('rect', { x: 290, y: 84, width: 920, height: 456, rx: 18, fill: '#f8fafc', stroke: '#94a3b8', 'stroke-dasharray': '6 5', 'stroke-width': 1.4 }, s._edges);
+  el('text', { x: 1190, y: 108, 'text-anchor': 'end', class: 'group' }, s._edges, 'Operación normal: se mide cada 1 s');
+  const INIT = state(s, 150, 320, 'UI_INIT', 'init', 'bienvenida 1,5 s');
+  const SHOW = state(s, 430, 320, 'UI_SHOW', 'main', 'T y H · P + ícono');
+  const SEL  = state(s, 660, 215, 'UI_SEL_VAR', 'config', 'elige T o H');
+  const MIN  = state(s, 950, 215, 'UI_SET_MIN', 'config', 'ajusta mín');
+  const MAX  = state(s, 950, 440, 'UI_SET_MAX', 'config', 'ajusta máx');
+  const ERR  = state(s, 430, 640, 'UI_ERROR', 'error', 'Error sensor');
+  start(s, 30, 320, INIT);
+  edge(s, INIT, SHOW, 'sensor OK', 0);
+  edge(s, INIT, ERR, 'sensor falla', 0.25, [-40, 0], 'end');
+  edge(s, SHOW, SEL, 'OK', 0.18, [-6, -6]);
+  edge(s, SEL, SHOW, 'BACK', 0.18, [10, 14], 'start');
+  edge(s, SEL, MIN, 'OK / copia límites', 0.12, [0, -6]);
+  edge(s, MIN, SEL, 'BACK / descarta', 0.12, [0, 16]);
+  edge(s, MIN, MAX, 'OK', 0.2, {x: 898, y: 320}, 'end');
+  edge(s, MAX, MIN, 'BACK', 0.2, {x: 1002, y: 320}, 'start');
+  edge(s, MAX, SHOW, 'OK [mín < máx]\n/ guarda límites', 0.12, [0, 34]);
+  loop(s, SHOW, -110, 'SW / alarma ON-OFF', [0, -6]);
+  loop(s, SEL, -90, 'encoder / T ↔ H', [42, 34], 'start');
+  loop(s, MIN, 0, 'encoder /\nmín ± paso', [12, 0], 'start');
+  loop(s, MAX, 0, 'encoder /\nmáx ± paso', [12, 0], 'start');
+  el('path', { d: 'M530 540 L478 588', stroke: '#374151', 'stroke-width': 1.6, fill: 'none', 'marker-end': 'url(#ui-arr)' }, s._edges);
+  label(s, 520, 578, 'lectura falla / silencia alarma', 'start');
+  edge(s, ERR, SHOW, 'lectura OK', 0, [10, 0], 'start');
+  loop(s, ERR, 180, '2 s / libera el bus\ny reintenta', [-12, 0], 'end');
+  legend(s, 760, 690, 'Notación: evento [condición] / acción');
+  legend(s, 760, 708, 'Los botones pasan por el antirrebote; el encoder suma pasos del TIM3.');
+}
+
+/* ---------- MEF de alarma ---------- */
+{
+  const W = 1000, H = 500;
+  const s = makeSvg('alarm', W, H, 'MEF de alarma (API_alarm)');
+  subtitle(s, W, 'Moore: las salidas dependen solo del estado');
+  const DIS = state(s, 230, 170, 'ALARM_DISABLED', 'idle', 'LED y buzzer OFF');
+  const ARM = state(s, 760, 170, 'ALARM_ARMED', 'ok', 'LED y buzzer OFF');
+  const ACT = state(s, 495, 380, 'ALARM_ACTIVE', 'error', 'LED ON · buzzer 1 Hz');
+  start(s, 70, 170, DIS);
+  edge(s, DIS, ARM, 'SW o comando ALARM ON', -0.12, [0, -8]);
+  edge(s, ARM, DIS, 'SW o comando ALARM OFF', -0.12, [0, 18]);
+  edge(s, ARM, ACT, 'T o H fuera\nde su rango', 0.12, {x: 588, y: 262}, 'end');
+  edge(s, ACT, ARM, 'las dos dentro con\nmargen de histéresis,\no sensor perdido', 0.12, {x: 700, y: 318}, 'start');
+  edge(s, ACT, DIS, 'SW o\ncomando ALARM OFF', 0.12, {x: 318, y: 298}, 'end');
+  legend(s, 40, 470, 'Se evalúa con cada medición (1 s). Histéresis: 0,3 °C y 2 %HR. El buzzer conmuta cada 500 ms en alarmTask().');
+}
+
+/* ---------- MEF de antirrebote ---------- */
+{
+  const W = 1000, H = 560;
+  const s = makeSvg('deb', W, H, 'MEF de antirrebote (API_debounce), una por pulsador');
+  subtitle(s, W, 'Práctica 4: no cuenta como MEF propia del trabajo');
+  const UP = state(s, 260, 180, 'BUTTON_UP', 'ok');
+  const FA = state(s, 740, 180, 'BUTTON_FALLING', 'wait');
+  const DN = state(s, 740, 430, 'BUTTON_DOWN', 'down');
+  const RI = state(s, 260, 430, 'BUTTON_RAISING', 'wait');
+  start(s, 90, 180, UP);
+  edge(s, UP, FA, 'apretado', -0.12, [0, -8]);
+  edge(s, FA, UP, '40 ms y suelto (rebote)', -0.12, [0, 18]);
+  edge(s, FA, DN, '40 ms y apretado\n/ marca pulsación', -0.15, [14, 0], 'start');
+  edge(s, DN, RI, 'suelto', -0.12, [0, 18]);
+  edge(s, RI, DN, '40 ms y apretado (rebote)', -0.12, [0, -8]);
+  edge(s, RI, UP, '40 ms y suelto', -0.15, [-14, 0], 'end');
+  legend(s, 40, 540, 'readKey() devuelve la pulsación marcada una sola vez y la borra.');
+}
+
+/* ---------- MEF del intérprete de comandos ---------- */
+{
+  const W = 1000, H = 640;
+  const s = makeSvg('cmd', W, H, 'MEF del intérprete de comandos (API_cmdparser)');
+  subtitle(s, W, 'Práctica 5, con la tabla de comandos que le pasa la aplicación');
+  const IDLE = state(s, 140, 300, 'CMD_IDLE', 'ok');
+  const RX   = state(s, 380, 300, 'CMD_RECEIVING', 'wait');
+  const PR   = state(s, 620, 300, 'CMD_PROCESS', 'down');
+  const EX   = state(s, 860, 300, 'CMD_EXEC', 'main');
+  const ER   = state(s, 500, 530, 'CMD_ERROR', 'error');
+  start(s, 30, 190, IDLE, 'Init');
+  edge(s, IDLE, RX, 'carácter\n/ guarda', 0, [0, -14]);
+  loop(s, RX, -90, 'carácter / guarda', [50, 8], 'start');
+  edge(s, RX, PR, 'fin de\nlínea', 0, [0, -14]);
+  edge(s, PR, EX, 'comando\nválido', 0, [0, -14]);
+  edge(s, EX, IDLE, 'el comando terminó bien', 0.53, [0, -8]);
+  edge(s, PR, IDLE, 'línea vacía o comentario', -0.36, {x: 380, y: 428});
+  edge(s, RX, ER, 'línea\nllena', 0.1, {x: 428, y: 470}, 'end');
+  edge(s, PR, ER, 'desconocido o\nmal argumento', -0.1, [8, 0], 'start');
+  edge(s, EX, ER, 'error del\ncomando', -0.12, [10, 12], 'start');
+  edge(s, ER, IDLE, '/ "ERROR: ..."', -0.15, [-10, 8], 'end');
+  legend(s, 40, 620, 'HELP está incorporado. Las líneas que empiezan con # o // se ignoran.');
+}
+</script>
+</body></html>

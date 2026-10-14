@@ -1,8 +1,13 @@
-/*
- * API_delay.h
+/**
+ * @file    API_delay.h
+ * @brief   Retardos no bloqueantes (práctica 3).
+ * @author  Elvis de la Torre
+ * @date    10 sept 2026
  *
- *  Created on: 10 sept 2026
- *      Author: elvisdt
+ * Un delay_t no frena el programa: se consulta en cada vuelta del lazo con
+ * delayRead() y devuelve true una sola vez cuando se cumple el tiempo. En la
+ * consulta siguiente vuelve a arrancar, así que sirve tanto para un evento
+ * único como para algo periódico.
  */
 
 #ifndef API_API_DELAY_H_
@@ -14,43 +19,44 @@ extern "C" {
 
 #include "API_common.h"
 
-typedef struct{
-	tick_t startTime;
-	tick_t duration;
-	bool_t running;
+/** @brief Estado de un retardo. Se usa solo a través de las funciones del módulo. */
+typedef struct {
+	tick_t startTime;   /**< Tick en que arrancó la cuenta. */
+	tick_t duration;    /**< Duración en ms. */
+	bool_t running;     /**< true mientras está contando. */
 } delay_t;
 
 /**
- * @brief  Inicializa el retardo con una duración (ms) y lo deja detenido.
- * @param  delay: puntero a la estructura delay_t
- * @param  duration: duración en milisegundos
+ * @brief Carga la duración y deja el retardo detenido.
+ * @param delay    Retardo a inicializar (no NULL).
+ * @param duration Duración en ms (mayor que 0).
  */
-void delayInit( delay_t * delay, tick_t duration );
+void delayInit(delay_t *delay, tick_t duration);
 
 /**
- * @brief  Retardo no bloqueante: arranca al primer llamado, luego avisa si venció.
- * @param  delay: puntero a la estructura delay_t
- * @retval bool_t: true si se cumplió la duración, false si sigue corriendo
+ * @brief Consulta el retardo sin bloquear.
+ *
+ * La primera llamada arranca la cuenta. Las siguientes devuelven false hasta
+ * que pasa la duración; ahí devuelve true y el retardo queda detenido.
+ *
+ * @param  delay Retardo (no NULL).
+ * @return true si se cumplió el tiempo.
  */
-bool_t delayRead( delay_t * delay );
+bool_t delayRead(delay_t *delay);
 
 /**
- * @brief  Cambia la duración del retardo, solo si no está corriendo.
- * @param  delay: puntero a la estructura delay_t
- * @param  duration: nueva duración en milisegundos
+ * @brief Cambia la duración. Si el retardo está corriendo no hace nada.
+ * @param delay    Retardo (no NULL).
+ * @param duration Nueva duración en ms (mayor que 0).
  */
-void delayWrite( delay_t * delay, tick_t duration );
+void delayWrite(delay_t *delay, tick_t duration);
 
 /**
- * @brief  Indica si el retardo está corriendo.
- * @param  delay: puntero a la estructura delay_t
- * @retval bool_t: true si está corriendo, false si no
+ * @brief Indica si el retardo está contando.
+ * @param  delay Retardo (no NULL).
+ * @return true si está corriendo.
  */
-bool_t delayIsRunning(delay_t * delay);
-
-
-
-
+bool_t delayIsRunning(delay_t *delay);
 
 #ifdef __cplusplus
 }

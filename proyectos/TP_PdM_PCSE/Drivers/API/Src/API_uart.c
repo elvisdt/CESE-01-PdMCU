@@ -1,13 +1,8 @@
-/*
- * API_uart.c
- *
- *  Created on: 24 sept 2026
- *      Author: elvisdt
- *
- *  UART de consola. Portable: el acceso al periférico lo resuelve API_port
- *  (formato fijo 8N1, sin control de flujo). La transmisión es por polling;
- *  la recepción la guarda el port en un buffer por interrupción, así que
- *  uartReceiveByte() no espera: devuelve lo que ya llegó.
+/**
+ * @file    API_uart.c
+ * @brief   UART de consola (práctica 5).
+ * @author  Elvis de la Torre
+ * @date    24 sept 2026
  */
 
 #include "API_uart.h"
@@ -16,23 +11,26 @@
 #include <stdio.h>
 #include <stddef.h>
 
-/* Private defines -----------------------------------------------------------*/
-#define UART_TX_TIMEOUT_MS   1000U
-#define UART_RX_TIMEOUT_MS   10U     /* uartReceiveStringSize()          */
-#define UART_RX_BYTE_WAIT_MS 0U      /* uartReceiveByte(): no bloquea el lazo */
-#define UART_CFG_MSG_LEN     256U
+/* Configuración privada -----------------------------------------------------*/
 
-/* Private variables ---------------------------------------------------------*/
+#define UART_TX_TIMEOUT_MS    1000U
+#define UART_RX_TIMEOUT_MS    10U     /**< uartReceiveStringSize() */
+#define UART_RX_BYTE_WAIT_MS  0U      /**< uartReceiveByte() no frena el lazo */
+#define UART_CFG_MSG_LEN      256U
+
+/* Variables privadas --------------------------------------------------------*/
+
 static uint32_t uartBaud  = 0U;
 static bool_t   uartReady = false;
 
-/* Private function prototypes -----------------------------------------------*/
+/* Funciones privadas --------------------------------------------------------*/
+
 static bool_t   uartIsValidSize(uint32_t size);
-static uint32_t uartStrLen(const uint8_t * pstring, uint32_t maxLen);
-static void     uartTransmit(const uint8_t * pdata, uint16_t size);
+static uint32_t uartStrLen(const uint8_t *pstring, uint32_t maxLen);
+static void     uartTransmit(const uint8_t *pdata, uint16_t size);
 static void     uartPrintConfig(void);
 
-/* Public functions ----------------------------------------------------------*/
+/* Funciones públicas --------------------------------------------------------*/
 
 bool_t uartInit(void)
 {
@@ -47,23 +45,21 @@ bool_t uartInit(void)
 	return true;
 }
 
-void uartSendString(uint8_t * pstring)
+void uartSendString(uint8_t *pstring)
 {
 	if (pstring == NULL) {
 		return;
 	}
 
-	/* strlen acotado: evita recorrer memoria si falta el '\0' */
+	/* Se mide con tope: si faltara el '\0' no se recorre toda la memoria. */
 	uint32_t len = uartStrLen(pstring, UART_MAX_SIZE + 1U);
 
-	if (!uartIsValidSize(len)) {
-		return;
+	if (uartIsValidSize(len)) {
+		uartTransmit(pstring, (uint16_t)len);
 	}
-
-	uartTransmit(pstring, (uint16_t)len);
 }
 
-void uartSendStringSize(uint8_t * pstring, uint16_t size)
+void uartSendStringSize(uint8_t *pstring, uint16_t size)
 {
 	if (pstring == NULL || !uartIsValidSize(size)) {
 		return;
@@ -72,23 +68,20 @@ void uartSendStringSize(uint8_t * pstring, uint16_t size)
 	uartTransmit(pstring, size);
 }
 
-void uartReceiveStringSize(uint8_t * pstring, uint16_t size)
+void uartReceiveStringSize(uint8_t *pstring, uint16_t size)
 {
 	if (pstring == NULL || !uartIsValidSize(size) || !uartReady) {
 		return;
 	}
 
-	port_status_t st = portUartRead(pstring, size, UART_RX_TIMEOUT_MS);
-
-	/* TIMEOUT: no llegaron datos.
-	 * ERROR: overrun (se perdió un byte); el driver ya limpió el flag,
-	 * no se bloquea el sistema por eso. Solo BUSY es un error real. */
-	if (st == PORT_BUSY) {
+	/* Que no llegue nada a tiempo es normal en una consola. Solo BUSY indica
+	 * un problema del driver. */
+	if (portUartRead(pstring, size, UART_RX_TIMEOUT_MS) == PORT_BUSY) {
 		Error_API_Handler();
 	}
 }
 
-bool_t uartReceiveByte(uint8_t * pbyte)
+bool_t uartReceiveByte(uint8_t *pbyte)
 {
 	if (pbyte == NULL || !uartReady) {
 		return false;
@@ -118,7 +111,7 @@ bool_t uartSetBaudrate(uint32_t baudrate)
 	}
 
 	if (!portUartInit(baudrate)) {
-		/* no se pudo: se vuelve al baudrate anterior */
+		/* Se vuelve al anterior para no quedarse sin consola. */
 		if (!portUartInit(uartBaud)) {
 			uartReady = false;
 			Error_API_Handler();
@@ -131,16 +124,16 @@ bool_t uartSetBaudrate(uint32_t baudrate)
 	return true;
 }
 
-/* Private functions ---------------------------------------------------------*/
+/* Funciones privadas --------------------------------------------------------*/
 
-/* true si size está en [UART_MIN_SIZE, UART_MAX_SIZE] */
+/** @brief true si size está entre UART_MIN_SIZE y UART_MAX_SIZE. */
 static bool_t uartIsValidSize(uint32_t size)
 {
 	return (size >= UART_MIN_SIZE) && (size <= UART_MAX_SIZE);
 }
 
-/* Longitud hasta '\0' o hasta maxLen */
-static uint32_t uartStrLen(const uint8_t * pstring, uint32_t maxLen)
+/** @brief Largo del string hasta el '\0', sin pasar de maxLen. */
+static uint32_t uartStrLen(const uint8_t *pstring, uint32_t maxLen)
 {
 	uint32_t len = 0U;
 
@@ -150,8 +143,8 @@ static uint32_t uartStrLen(const uint8_t * pstring, uint32_t maxLen)
 	return len;
 }
 
-/* Transmite y verifica el resultado del port */
-static void uartTransmit(const uint8_t * pdata, uint16_t size)
+/** @brief Transmite y detiene el sistema si el port falla. */
+static void uartTransmit(const uint8_t *pdata, uint16_t size)
 {
 	if (!uartReady) {
 		return;
@@ -162,20 +155,20 @@ static void uartTransmit(const uint8_t * pdata, uint16_t size)
 	}
 }
 
-/* Imprime la configuración de la UART (formato fijo 8N1 del port) */
+/** @brief Imprime la configuración, como pide la práctica 5. */
 static void uartPrintConfig(void)
 {
 	static uint8_t msg[UART_CFG_MSG_LEN];
 
 	int n = snprintf((char *)msg, sizeof(msg),
-			"\r\n--- UART init OK ---\r\n"
-			"  Baudrate     : %lu\r\n"
-			"  Word length  : 8 bits\r\n"
-			"  Parity       : none\r\n"
-			"  Stop bits    : 1\r\n"
-			"  Flow control : none\r\n"
-			"  Mode         : TX/RX\r\n",
-			(unsigned long)uartBaud);
+	                 "\r\n--- UART init OK ---\r\n"
+	                 "  Baudrate     : %lu\r\n"
+	                 "  Word length  : 8 bits\r\n"
+	                 "  Parity       : none\r\n"
+	                 "  Stop bits    : 1\r\n"
+	                 "  Flow control : none\r\n"
+	                 "  Mode         : TX/RX\r\n",
+	                 (unsigned long)uartBaud);
 
 	if (n > 0) {
 		uartSendString(msg);

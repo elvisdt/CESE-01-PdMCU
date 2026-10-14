@@ -1,18 +1,17 @@
-# Doxyfile - TP final PdM (Estación de medición ambiental)
-# Uso:  cd proyectos/TP_PdM_PCSE && doxygen
-# Salida: docs/doxygen/html/index.html
+# Doxyfile - Estación de medición ambiental (TP final PdM)
 #
+# Genera la documentación en docs/doxygen/html/index.html.
 # Solo se listan las opciones que cambian; el resto queda con su valor por defecto.
 
 #---------------------------------------------------------------- Proyecto
-PROJECT_NAME           = "TP PdM - Estación de medición ambiental"
-PROJECT_BRIEF          = "NUCLEO-F446RE: BME280, LCD I2C, encoder, alarma y consola UART"
+PROJECT_NAME           = "Estación de medición ambiental"
+PROJECT_BRIEF          = "TP final PdM - NUCLEO-F446RE con BME280, LCD I2C, encoder, alarma y consola"
 PROJECT_NUMBER         = 1.0
 OUTPUT_DIRECTORY       = docs/doxygen
 OUTPUT_LANGUAGE        = Spanish
 
 #---------------------------------------------------------------- Fuentes
-# Solo el código propio (no la HAL ni CMSIS ni lo que genera CubeMX)
+# Solo el código propio: ni la HAL, ni CMSIS, ni lo que genera CubeMX.
 INPUT                  = README.md \
                          App \
                          Drivers/API \
@@ -24,11 +23,12 @@ INPUT_ENCODING         = UTF-8
 IMAGE_PATH             = docs/diagramas
 
 #---------------------------------------------------------------- Qué documentar
-EXTRACT_ALL            = YES        # muestra también lo que no tiene comentario Doxygen
-EXTRACT_STATIC         = YES        # incluye funciones privadas (static)
+EXTRACT_ALL            = YES        # también lo que no tiene comentario
+EXTRACT_STATIC         = YES        # funciones y variables privadas de cada módulo
 EXTRACT_PRIVATE        = YES
 OPTIMIZE_OUTPUT_FOR_C  = YES
 JAVADOC_AUTOBRIEF      = YES
+SORT_MEMBER_DOCS       = NO         # respeta el orden de los archivos
 SOURCE_BROWSER         = YES        # código fuente navegable
 INLINE_SOURCES         = NO
 WARN_IF_UNDOCUMENTED   = NO
@@ -42,7 +42,7 @@ HTML_COLORSTYLE        = LIGHT
 
 #---------------------------------------------------------------- Diagramas (requiere graphviz)
 HAVE_DOT               = YES
-CALL_GRAPH             = YES        # qué funciones llama cada función
+CALL_GRAPH             = YES        # a quién llama cada función
 CALLER_GRAPH           = YES        # quién llama a cada función
 INCLUDE_GRAPH          = YES
 INCLUDED_BY_GRAPH      = YES
@@ -50,8 +50,9 @@ DOT_IMAGE_FORMAT       = svg
 INTERACTIVE_SVG        = YES
 
 #---------------------------------------------------------------- Preprocesador
-# Para que Doxygen vea el código como en la placa (I2C y TIM habilitados)
+# Para que Doxygen vea el código como se compila para la placa.
 ENABLE_PREPROCESSING   = YES
 PREDEFINED             = STM32F446xx USE_HAL_DRIVER \
                          HAL_I2C_MODULE_ENABLED HAL_TIM_MODULE_ENABLED \
+                         APP_TEST=0 \
                          __attribute__(x)=

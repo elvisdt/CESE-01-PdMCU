@@ -1,14 +1,12 @@
-/*
- * app_test.h
+/**
+ * @file    app_test.h
+ * @brief   Pruebas de un módulo por vez.
+ * @author  Elvis de la Torre
+ * @date    4 oct 2026
  *
- *  Created on: 4 oct 2026
- *      Author: elvisdt
- *
- *  Pruebas de a un módulo por vez. Se elige con APP_TEST (acá o con -DAPP_TEST=n
- *  en Properties > C/C++ Build > Settings > Preprocessor). Con TEST_NONE
- *  corre la aplicación normal (app_ui).
- *
- *  Todas las pruebas reportan por la consola UART (115200 8N1).
+ * Cada módulo se fue probando solo en la placa antes de integrarlo. La
+ * prueba se elige con APP_TEST; con TEST_NONE corre la estación completa.
+ * Todas informan por la consola (115200 8N1).
  */
 
 #ifndef APP_INC_APP_TEST_H_
@@ -18,21 +16,24 @@
 extern "C" {
 #endif
 
-#define TEST_NONE       0   /* aplicación completa (app_ui)                   */
-#define TEST_DELAY      1   /* LD2 parpadea a 1 Hz + "tick" por UART          */
-#define TEST_UART       2   /* consola de la práctica 5 (HELP, LED, STATUS...) */
-#define TEST_DEBOUNCE   3   /* cuenta pulsaciones de OK / BACK / SW           */
-#define TEST_ENCODER    4   /* imprime los pasos del encoder y el acumulado   */
-#define TEST_I2C_SCAN   5   /* lista las direcciones que responden (0x27, 0x76) */
-#define TEST_LCD        6   /* "Hola PdM" en el LCD                           */
-#define TEST_BME280     7   /* chip ID y mediciones cada 1 s                  */
-#define TEST_ALARM      8   /* OK habilita/deshabilita, estado por UART       */
+#define TEST_NONE       0   /**< Estación completa (app_ui). */
+#define TEST_DELAY      1   /**< LD2 parpadea a 1 Hz y avisa por consola. */
+#define TEST_UART       2   /**< Consola de la práctica 5: LED y STATUS. */
+#define TEST_DEBOUNCE   3   /**< Cuenta las pulsaciones de cada botón. */
+#define TEST_ENCODER    4   /**< Pasos del encoder y su pulsador. */
+#define TEST_I2C_SCAN   5   /**< Lista las direcciones que responden en el bus. */
+#define TEST_LCD        6   /**< Texto y un contador de segundos en el LCD. */
+#define TEST_BME280     7   /**< ID del sensor y una medición por segundo. */
+#define TEST_ALARM      8   /**< Alarma con un dato simulado; OK la habilita. */
 
 #ifndef APP_TEST
-#define APP_TEST        TEST_NONE    /* cambiar acá para correr una prueba */
+#define APP_TEST        TEST_NONE   /**< Prueba elegida. */
 #endif
 
+/** @brief Inicializa la prueba elegida. */
 void appTestInit(void);
+
+/** @brief Una vuelta de la prueba elegida. No bloquea. */
 void appTestUpdate(void);
 
 #ifdef __cplusplus

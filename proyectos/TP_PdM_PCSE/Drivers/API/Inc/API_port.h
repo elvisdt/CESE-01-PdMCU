@@ -1,13 +1,15 @@
-/*
- * API_port.h
+/**
+ * @file    API_port.h
+ * @brief   Capa de portabilidad: todo lo que los módulos API piden al hardware.
+ * @author  Elvis de la Torre
+ * @date    1 oct 2026
  *
- *  Created on: 1 oct 2026
- *      Author: elvisdt
+ * Ningún módulo API incluye la HAL del fabricante; solo este header. Para
+ * llevar el proyecto a otro micro alcanza con reescribir su implementación,
+ * que para la NUCLEO-F446RE está en Drivers/Port/STM32F4xx/port_stm32f4xx.c.
  *
- *  Capa de portabilidad (port): única interfaz entre los módulos API_* y el
- *  hardware. Los API_* solo incluyen este header, nunca la HAL del fabricante.
- *
- *  Implementación para NUCLEO-F446RE: Drivers/Port/STM32F4xx/port_stm32f4xx.c
+ * Las direcciones I2C se pasan en 7 bits (0x27, 0x76); el port las ajusta
+ * a lo que pida la HAL.
  */
 
 #ifndef API_INC_API_PORT_H_
@@ -20,81 +22,104 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Resultado de las operaciones de I/O del port */
+/** @brief Resultado de una operación de entrada/salida. */
 typedef enum {
-	PORT_OK = 0,
-	PORT_TIMEOUT,    /* no se completó en el tiempo dado                  */
-	PORT_BUSY,       /* periférico ocupado                                */
-	PORT_ERROR       /* error de hardware/driver o periférico no habilitado */
+	PORT_OK = 0,     /**< Terminó bien. */
+	PORT_TIMEOUT,    /**< No terminó en el tiempo pedido. */
+	PORT_BUSY,       /**< El periférico estaba ocupado. */
+	PORT_ERROR       /**< Error del periférico, o periférico no habilitado. */
 } port_status_t;
 
-/* Pulsadores de la aplicación */
+/** @brief Pulsadores de la placa. */
 typedef enum {
-	PORT_BTN_OK = 0,
-	PORT_BTN_BACK,
-	PORT_BTN_ENC_SW,
-	PORT_BTN_COUNT
+	PORT_BTN_OK = 0,   /**< Confirmar. */
+	PORT_BTN_BACK,     /**< Volver. */
+	PORT_BTN_ENC_SW,   /**< Eje del encoder. */
+	PORT_BTN_COUNT     /**< Cantidad de pulsadores. */
 } port_button_t;
 
 /* Sistema -------------------------------------------------------------------*/
 
-/** @brief Milisegundos desde el arranque (contador libre, puede desbordar). */
+/** @brief Milisegundos desde el arranque. Es un contador libre que da la vuelta. */
 uint32_t portGetTickMs(void);
 
-/** @brief Retardo bloqueante. Usar SOLO en inicializaciones (p. ej. LCD). */
+/** @brief Retardo bloqueante. Solo para inicializaciones cortas. */
 void portDelayMs(uint32_t ms);
 
-/** @brief Error irrecuperable: deshabilita interrupciones y detiene el sistema. */
+/** @brief Detiene el sistema con las interrupciones deshabilitadas. */
 void portFatalError(void);
 
 /* GPIO ----------------------------------------------------------------------*/
 
-/** @brief Escribe el LED de alarma / LD2 (true = encendido). */
+/** @brief Enciende (true) o apaga el LED de alarma. */
 void portLedWrite(bool on);
 
-/** @brief Invierte el LED. */
+/** @brief Invierte el LED de alarma. */
 void portLedToggle(void);
 
-/** @brief Lee el LED (true = encendido). */
+/** @brief Estado del LED de alarma (true = encendido). */
 bool portLedRead(void);
 
-/** @brief Escribe el buzzer (true = encendido). */
+/** @brief Enciende (true) o apaga el buzzer. */
 void portBuzzerWrite(bool on);
 
-/** @brief Lee un pulsador sin antirrebote (true = presionado). */
+/**
+ * @brief  Lee un pulsador tal cual está, sin antirrebote.
+ * @return true mientras está apretado.
+ */
 bool portButtonRead(port_button_t btn);
 
-/* UART (consola, 8N1) -------------------------------------------------------*/
+/* UART de consola (8N1) -----------------------------------------------------*/
 
-bool          portUartInit(uint32_t baudrate);
-bool          portUartDeInit(void);
+/** @brief Inicializa la UART y su recepción por interrupción. */
+bool portUartInit(uint32_t baudrate);
+
+/** @brief Libera la UART (para cambiar el baudrate). */
+bool portUartDeInit(void);
+
+/** @brief Transmite y espera a que termine, como máximo timeoutMs. */
 port_status_t portUartWrite(const uint8_t *data, uint16_t size, uint32_t timeoutMs);
+
+/**
+ * @brief  Toma bytes ya recibidos.
+ *
+ * La recepción la hace la interrupción, que guarda cada byte en un buffer.
+ * Esta función los saca de ahí; con timeoutMs = 0 no espera nada.
+ */
 port_status_t portUartRead(uint8_t *data, uint16_t size, uint32_t timeoutMs);
 
-/* I2C (bus compartido BME280 + LCD) -----------------------------------------*/
-/* Direcciones en 7 bits (0x76, 0x27). El port las desplaza para la HAL.     */
+/* I2C: bus compartido por el LCD y el BME280 --------------------------------*/
 
-/** @brief Inicializa el bus I2C (100 kHz). */
-bool          portI2cInit(void);
+/** @brief Inicializa el bus a 100 kHz. */
+bool portI2cInit(void);
+
+/**
+ * @brief Libera el bus si un esclavo quedó reteniendo SDA y lo reinicializa.
+ *
+ * Pasa cuando un módulo se desconecta o se resetea en medio de una
+ * transferencia: el esclavo espera más pulsos de reloj y deja SDA en bajo.
+ * Se le dan hasta 9 pulsos en SCL y una condición de STOP.
+ */
+bool portI2cRecover(void);
 
 /** @brief true si el dispositivo responde con ACK en esa dirección. */
-bool          portI2cIsReady(uint8_t addr7);
+bool portI2cIsReady(uint8_t addr7);
 
-/** @brief Escritura directa (sin registro), usada por el PCF8574 del LCD. */
+/** @brief Escritura directa, sin registro (la usa el PCF8574 del LCD). */
 port_status_t portI2cWrite(uint8_t addr7, const uint8_t *data, uint16_t size, uint32_t timeoutMs);
 
-/** @brief Lee 'size' bytes a partir del registro 'reg' (BME280). */
+/** @brief Lee size bytes a partir del registro reg (la usa el BME280). */
 port_status_t portI2cMemRead(uint8_t addr7, uint8_t reg, uint8_t *data, uint16_t size, uint32_t timeoutMs);
 
-/** @brief Escribe 'size' bytes a partir del registro 'reg' (BME280). */
+/** @brief Escribe size bytes a partir del registro reg (la usa el BME280). */
 port_status_t portI2cMemWrite(uint8_t addr7, uint8_t reg, const uint8_t *data, uint16_t size, uint32_t timeoutMs);
 
-/* Encoder (timer en modo encoder) -------------------------------------------*/
+/* Encoder -------------------------------------------------------------------*/
 
-/** @brief Inicializa y arranca el timer en modo encoder. */
-bool     portEncoderInit(void);
+/** @brief Arranca el timer en modo encoder. */
+bool portEncoderInit(void);
 
-/** @brief Valor actual del contador del timer (16 bits, da la vuelta). */
+/** @brief Contador del timer. Es de 16 bits y da la vuelta. */
 uint16_t portEncoderGetCount(void);
 
 #ifdef __cplusplus

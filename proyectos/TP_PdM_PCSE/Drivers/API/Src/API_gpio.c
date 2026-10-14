@@ -1,14 +1,12 @@
-/*
- * API_gpio.c
- *
- *  Created on: 1 oct 2026
- *      Author: elvisdt
+/**
+ * @file    API_gpio.c
+ * @brief   Salidas de la estación: LED de alarma y buzzer.
+ * @author  Elvis de la Torre
+ * @date    1 oct 2026
  */
 
 #include "API_gpio.h"
 #include "API_port.h"
-
-/* LED LD2 -------------------------------------------------------------------*/
 
 void gpioLedOn(void)
 {
@@ -29,8 +27,6 @@ bool_t gpioLedIsOn(void)
 {
 	return portLedRead();
 }
-
-/* Buzzer --------------------------------------------------------------------*/
 
 void gpioBuzzerWrite(bool_t on)
 {

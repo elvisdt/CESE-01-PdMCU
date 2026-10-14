@@ -1,11 +1,12 @@
-/*
- * API_bme280.c
+/**
+ * @file    API_bme280.c
+ * @brief   Sensor BME280: temperatura, humedad y presión.
+ * @author  Elvis de la Torre
+ * @date    4 oct 2026
  *
- *  Created on: 4 oct 2026
- *      Author: elvisdt
- *
- *  Compensación: fórmulas en enteros del datasheet de Bosch (BST-BME280-DS002,
- *  sección 4.2.3 y 8.1/8.2).
+ * La compensación usa las fórmulas en enteros del datasheet de Bosch
+ * (BST-BME280-DS002, secciones 4.2.3 y 8). Se eligieron las de enteros
+ * porque son las que Bosch verifica y no dependen de la FPU.
  */
 
 #include "API_bme280.h"
@@ -14,34 +15,40 @@
 #include <stddef.h>
 
 /* Registros -----------------------------------------------------------------*/
-#define REG_CALIB_TP      0x88U    /* 0x88..0xA1: dig_T1..dig_H1 (26 bytes) */
+#define REG_CALIB_TP      0x88U    /**< 0x88..0xA1: dig_T1..dig_H1 (26 bytes) */
 #define REG_CHIP_ID       0xD0U
 #define REG_RESET         0xE0U
-#define REG_CALIB_H       0xE1U    /* 0xE1..0xE7: dig_H2..dig_H6 (7 bytes)  */
+#define REG_CALIB_H       0xE1U    /**< 0xE1..0xE7: dig_H2..dig_H6 (7 bytes) */
 #define REG_CTRL_HUM      0xF2U
 #define REG_STATUS        0xF3U
 #define REG_CTRL_MEAS     0xF4U
 #define REG_CONFIG        0xF5U
-#define REG_DATA          0xF7U    /* 0xF7..0xFE: press, temp, hum (8 bytes) */
+#define REG_DATA          0xF7U    /**< 0xF7..0xFE: press, temp, hum (8 bytes) */
 
 #define CALIB_TP_LEN      26U
 #define CALIB_H_LEN       7U
 #define DATA_LEN          8U
 
 #define RESET_CMD         0xB6U
-#define ADC_SKIPPED       0x80000      /* valor de reset de los registros de dato */
+#define ADC_SKIPPED       0x80000   /**< valor de los registros de dato sin medición */
 #define STATUS_IM_UPDATE  0x01U
 
-/* Configuración: oversampling x1 en las tres, modo normal, t_sb 1000 ms */
-#define CTRL_HUM_VALUE    0x01U    /* osrs_h = x1                          */
-#define CTRL_MEAS_VALUE   0x27U    /* osrs_t = x1, osrs_p = x1, modo normal */
-#define CONFIG_VALUE      0xA0U    /* t_sb = 1000 ms, filtro off           */
+/* Configuración: oversampling x1 en las tres medidas, modo normal y una
+ * medición por segundo, que es lo que lee la aplicación. */
+#define CTRL_HUM_VALUE    0x01U    /**< osrs_h = x1 */
+#define CTRL_MEAS_VALUE   0x27U    /**< osrs_t = x1, osrs_p = x1, modo normal */
+#define CONFIG_VALUE      0xA0U    /**< t_sb = 1000 ms, filtro off */
 
 #define T_RESET_MS        3U
-#define T_FIRST_MEAS_MS   20U      /* conversión T+P+H x1: 9,3 ms máx (datasheet 9.1) */
+#define T_FIRST_MEAS_MS   20U      /**< una medición x1 tarda 9,3 ms como máximo (datasheet 9.1) */
 #define RESET_RETRIES     5U
 
-/* Coeficientes de calibración */
+/* Escalas de los resultados de la compensación. */
+#define TEMP_PER_DEGREE   100.0f     /**< centésimas de °C */
+#define PRESS_PER_HPA     25600.0f   /**< Pa con 8 bits de fracción, por 100 */
+#define HUM_PER_PERCENT   1024.0f    /**< %HR con 10 bits de fracción */
+
+/* Coeficientes de calibración que trae grabados cada sensor. */
 typedef struct {
 	uint16_t T1; int16_t T2; int16_t T3;
 	uint16_t P1; int16_t P2; int16_t P3; int16_t P4; int16_t P5;
@@ -49,18 +56,18 @@ typedef struct {
 	uint8_t  H1; int16_t H2; uint8_t H3; int16_t H4; int16_t H5; int8_t H6;
 } bme280Calib_t;
 
-/* Private variables ---------------------------------------------------------*/
+/* Variables privadas --------------------------------------------------------*/
 static bme280Calib_t calib;
-static int32_t       tFine = 0;      /* compartido entre las compensaciones */
+static int32_t       tFine = 0;      /**< temperatura fina: la usan P y H */
 static bool_t        ready = false;
 
-/* Private function prototypes -----------------------------------------------*/
+/* Funciones privadas --------------------------------------------------------*/
 static bool_t   bme280ReadCalibration(void);
 static int32_t  bme280CompensateT(int32_t adcT);
 static uint32_t bme280CompensateP(int32_t adcP);
 static uint32_t bme280CompensateH(int32_t adcH);
 
-/* Public functions ----------------------------------------------------------*/
+/* Funciones públicas --------------------------------------------------------*/
 
 bme280Status_t bme280ReadChipId(uint8_t *id)
 {
@@ -92,7 +99,7 @@ bme280Status_t bme280Init(void)
 		return BME280_ERR_ID;
 	}
 
-	/* reset y esperar a que copie la calibración de la NVM */
+	/* Reset por software y espera a que copie la calibración de su memoria. */
 	if (!bme280PortWrite(REG_RESET, RESET_CMD)) {
 		return BME280_ERR_PORT;
 	}
@@ -110,15 +117,16 @@ bme280Status_t bme280Init(void)
 		return BME280_ERR_PORT;
 	}
 
-	/* ctrl_hum solo se aplica después de escribir ctrl_meas (datasheet 5.4.3) */
+	/* ctrl_hum recién se aplica al escribir ctrl_meas (datasheet 5.4.3), por
+	 * eso va primero. */
 	if (!bme280PortWrite(REG_CTRL_HUM, CTRL_HUM_VALUE) ||
 	    !bme280PortWrite(REG_CONFIG, CONFIG_VALUE) ||
 	    !bme280PortWrite(REG_CTRL_MEAS, CTRL_MEAS_VALUE)) {
 		return BME280_ERR_PORT;
 	}
 
-	/* Hasta que termina la primera conversión los registros de dato valen
-	 * 0x80000, que bme280Read() toma como sensor reiniciado. */
+	/* Hasta que termina la primera medición los registros valen 0x80000, que
+	 * bme280Read() interpreta como un sensor reiniciado. */
 	bme280PortDelayMs(T_FIRST_MEAS_MS);
 
 	ready = true;
@@ -143,24 +151,25 @@ bme280Status_t bme280Read(bme280Data_t *data)
 	int32_t adcT = (int32_t)(((uint32_t)raw[3] << 12) | ((uint32_t)raw[4] << 4) | ((uint32_t)raw[5] >> 4));
 	int32_t adcH = (int32_t)(((uint32_t)raw[6] << 8)  |  (uint32_t)raw[7]);
 
-	/* Si el sensor se reinició (corte de alimentación) vuelve a modo sleep y
-	 * sus registros quedan en 0x80000: no hay medición válida, hay que
-	 * llamar de nuevo a bme280Init(). */
+	/* Si al sensor se le cortó la alimentación vuelve a modo sleep con los
+	 * registros en 0x80000. Sin esta verificación se seguiría mostrando un
+	 * valor fijo y equivocado (pasó al reconectarlo en caliente). */
 	if (adcT == ADC_SKIPPED || adcP == ADC_SKIPPED) {
 		ready = false;
 		return BME280_ERR_NOT_INIT;
 	}
 
-	/* la temperatura va primero: calcula tFine que usan P y H */
-	data->temperature = (float)bme280CompensateT(adcT) / 100.0f;        /* 0.01 °C      */
-	data->pressure    = (float)bme280CompensateP(adcP) / 25600.0f;      /* Q24.8 Pa -> hPa */
-	data->humidity    = (float)bme280CompensateH(adcH) / 1024.0f;       /* Q22.10 %HR   */
+	/* La temperatura va primero porque calcula tFine. */
+	data->temperature = (float)bme280CompensateT(adcT) / TEMP_PER_DEGREE;
+	data->pressure    = (float)bme280CompensateP(adcP) / PRESS_PER_HPA;
+	data->humidity    = (float)bme280CompensateH(adcH) / HUM_PER_PERCENT;
 
 	return BME280_OK;
 }
 
-/* Private functions ---------------------------------------------------------*/
+/* Funciones privadas --------------------------------------------------------*/
 
+/** @brief Lee los coeficientes de calibración (registros 0x88 y 0xE1). */
 static bool_t bme280ReadCalibration(void)
 {
 	uint8_t tp[CALIB_TP_LEN];
@@ -183,18 +192,18 @@ static bool_t bme280ReadCalibration(void)
 	calib.P7 = (int16_t)(tp[19] << 8 | tp[18]);
 	calib.P8 = (int16_t)(tp[21] << 8 | tp[20]);
 	calib.P9 = (int16_t)(tp[23] << 8 | tp[22]);
-	calib.H1 = tp[25];                                        /* 0xA1 */
+	calib.H1 = tp[25];                                        /**< 0xA1 */
 
-	calib.H2 = (int16_t)(h[1] << 8 | h[0]);                   /* 0xE1/0xE2 */
-	calib.H3 = h[2];                                          /* 0xE3      */
-	calib.H4 = (int16_t)((int16_t)(int8_t)h[3] * 16 | (h[4] & 0x0F));   /* 0xE4[11:4] 0xE5[3:0] */
-	calib.H5 = (int16_t)((int16_t)(int8_t)h[5] * 16 | (h[4] >> 4));     /* 0xE6[11:4] 0xE5[7:4] */
-	calib.H6 = (int8_t)h[6];                                  /* 0xE7      */
+	calib.H2 = (int16_t)(h[1] << 8 | h[0]);                   /**< 0xE1/0xE2 */
+	calib.H3 = h[2];                                          /**< 0xE3 */
+	calib.H4 = (int16_t)((int16_t)(int8_t)h[3] * 16 | (h[4] & 0x0F));   /**< 0xE4[11:4] 0xE5[3:0] */
+	calib.H5 = (int16_t)((int16_t)(int8_t)h[5] * 16 | (h[4] >> 4));     /**< 0xE6[11:4] 0xE5[7:4] */
+	calib.H6 = (int8_t)h[6];                                  /**< 0xE7 */
 
 	return true;
 }
 
-/* Resultado en 0.01 °C ("5123" = 51.23 °C) */
+/** @brief Temperatura en centésimas de °C (5123 = 51,23 °C). */
 static int32_t bme280CompensateT(int32_t adcT)
 {
 	int32_t var1 = ((((adcT >> 3) - ((int32_t)calib.T1 << 1))) * (int32_t)calib.T2) >> 11;
@@ -204,7 +213,7 @@ static int32_t bme280CompensateT(int32_t adcT)
 	return (tFine * 5 + 128) >> 8;
 }
 
-/* Resultado en Pa en formato Q24.8 ("24674867" = 24674867/256 = 96386.2 Pa) */
+/** @brief Presión en Pa con 8 bits de fracción (24674867 / 256 = 96386,2 Pa). */
 static uint32_t bme280CompensateP(int32_t adcP)
 {
 	int64_t var1 = (int64_t)tFine - 128000;
@@ -214,7 +223,7 @@ static uint32_t bme280CompensateP(int32_t adcP)
 	var1 = ((var1 * var1 * (int64_t)calib.P3) >> 8) + ((var1 * (int64_t)calib.P2) << 12);
 	var1 = ((((int64_t)1) << 47) + var1) * (int64_t)calib.P1 >> 33;
 	if (var1 == 0) {
-		return 0U;                   /* evita división por cero */
+		return 0U;                   /**< evita división por cero */
 	}
 	int64_t p = 1048576 - adcP;
 	p = (((p << 31) - var2) * 3125) / var1;
@@ -224,7 +233,7 @@ static uint32_t bme280CompensateP(int32_t adcP)
 	return (uint32_t)p;
 }
 
-/* Resultado en %HR en formato Q22.10 ("47445" = 47445/1024 = 46.33 %HR) */
+/** @brief Humedad en %HR con 10 bits de fracción (47445 / 1024 = 46,33 %HR). */
 static uint32_t bme280CompensateH(int32_t adcH)
 {
 	int32_t v = tFine - (int32_t)76800;
