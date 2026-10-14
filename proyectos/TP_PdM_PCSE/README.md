@@ -8,9 +8,9 @@ límites de alarma que se ajustan con un encoder; si alguna sale de su rango se
 encienden un LED y un buzzer. La presión solo se muestra. Todo se puede
 consultar y configurar también desde una consola serie.
 
-Corre sobre una **NUCLEO-F446RE** y parte de las prácticas del curso: el retardo
-no bloqueante de la práctica 3, el antirrebote de la 4 y la UART con el
-intérprete de comandos de la 5.
+Corre sobre una **NUCLEO-F446RE** y parte de los módulos hechos en las
+prácticas del curso: el retardo no bloqueante, el antirrebote y la UART con el
+intérprete de comandos.
 
 ## Hardware
 
@@ -78,10 +78,10 @@ El trabajo tiene cuatro MEF. Dos son propias y dos vienen de las prácticas:
 |---|---|---|---|
 | Interfaz de usuario | `app_ui` | Mealy | propia |
 | Alarma | `API_alarm` | Moore | propia |
-| Intérprete de comandos | `API_cmdparser` | — | práctica 5 |
-| Antirrebote, una por pulsador | `API_debounce` | — | práctica 4 |
+| Intérprete de comandos | `API_cmdparser` | — | prácticas |
+| Antirrebote, una por pulsador | `API_debounce` | — | prácticas |
 
-Todas siguen el esquema de la clase 4: un `enum` privado con los estados, una
+Todas siguen el mismo esquema: un `enum` privado con los estados, una
 variable `static` con el estado actual, una función que inicializa y otra que
 actualiza con un `switch`, y un `default` que vuelve a un estado conocido.
 
@@ -137,7 +137,7 @@ alarma se calla porque no hay dato para afirmar que siga fuera de rango.
 
 ### Intérprete de comandos y antirrebote
 
-Son las MEF de las prácticas 5 y 4. El intérprete cambió en una cosa: los
+Son las MEF de las prácticas. El intérprete cambió en una cosa: los
 comandos no están fijos en el módulo, la aplicación le pasa una tabla. El
 antirrebote ahora tiene una instancia por pulsador.
 
@@ -169,11 +169,11 @@ Para llevarlo a otro micro alcanza con reescribir la carpeta `Port`.
 
 | Módulo | Qué hace | Origen |
 |---|---|---|
-| `API_delay` | retardos no bloqueantes | práctica 3 |
-| `API_debounce` | antirrebote de tres pulsadores | práctica 4 |
-| `API_uart` | consola serie | práctica 5 |
-| `API_cmdparser` | intérprete de comandos con tabla | práctica 5 |
-| `API_gpio` | LED y buzzer | práctica 5 |
+| `API_delay` | retardos no bloqueantes | prácticas |
+| `API_debounce` | antirrebote de tres pulsadores | prácticas |
+| `API_uart` | consola serie | prácticas |
+| `API_cmdparser` | intérprete de comandos con tabla | prácticas |
+| `API_gpio` | LED y buzzer | prácticas |
 | `API_encoder` | pasos del encoder a partir del TIM3 | nuevo |
 | `API_lcd` | LCD 16x2 por I2C | nuevo, a partir del ejemplo de Protocolos |
 | `API_bme280` | lectura y compensación del sensor | nuevo |

@@ -1,10 +1,10 @@
 /**
  * @file    API_debounce.h
- * @brief   Antirrebote de los pulsadores (práctica 4).
+ * @brief   Antirrebote de los pulsadores.
  * @author  Elvis de la Torre
  * @date    17 sept 2026
  *
- * Es la MEF de la práctica 4 con una instancia por pulsador. Cada una
+ * Es la MEF de las prácticas con una instancia por pulsador. Cada una
  * confirma el cambio solo si el pin sigue igual 40 ms después, y deja una
  * marca que readKey() consume una vez. Mantener apretado un botón genera un
  * solo evento.

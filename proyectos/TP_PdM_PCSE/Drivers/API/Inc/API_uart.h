@@ -1,6 +1,6 @@
 /**
  * @file    API_uart.h
- * @brief   UART de consola (práctica 5).
+ * @brief   UART de consola.
  * @author  Elvis de la Torre
  * @date    24 sept 2026
  *

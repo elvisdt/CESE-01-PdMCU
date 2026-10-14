@@ -71,3 +71,6 @@ docs/private/
 
 # Material privado (pautas del curso, borradores)
 **/docs/file/
+
+# Fuentes HTML de los diagramas (solo se suben los PNG)
+**/docs/diagramas/src/

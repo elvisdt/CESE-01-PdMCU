@@ -4,7 +4,7 @@
  * @author  Elvis de la Torre
  * @date    24 sept 2026
  *
- * Los tipos tick_t y bool_t vienen de la práctica 3. Están acá y no en
+ * Los tipos tick_t y bool_t vienen de las prácticas. Están acá y no en
  * API_delay.h para que cualquier módulo los use sin depender del retardo.
  */
 

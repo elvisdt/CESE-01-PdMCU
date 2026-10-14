@@ -18,7 +18,7 @@ extern "C" {
 
 #define TEST_NONE       0   /**< Estación completa (app_ui). */
 #define TEST_DELAY      1   /**< LD2 parpadea a 1 Hz y avisa por consola. */
-#define TEST_UART       2   /**< Consola de la práctica 5: LED y STATUS. */
+#define TEST_UART       2   /**< Consola de las prácticas: LED y STATUS. */
 #define TEST_DEBOUNCE   3   /**< Cuenta las pulsaciones de cada botón. */
 #define TEST_ENCODER    4   /**< Pasos del encoder y su pulsador. */
 #define TEST_I2C_SCAN   5   /**< Lista las direcciones que responden en el bus. */

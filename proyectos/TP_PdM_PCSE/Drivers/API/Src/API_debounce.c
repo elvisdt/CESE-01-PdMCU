@@ -1,6 +1,6 @@
 /**
  * @file    API_debounce.c
- * @brief   Antirrebote de los pulsadores (práctica 4).
+ * @brief   Antirrebote de los pulsadores.
  * @author  Elvis de la Torre
  * @date    17 sept 2026
  *

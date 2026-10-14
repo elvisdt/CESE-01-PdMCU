@@ -1,6 +1,6 @@
 /**
  * @file    API_cmdparser.c
- * @brief   Intérprete de comandos por UART (práctica 5).
+ * @brief   Intérprete de comandos por UART.
  * @author  Elvis de la Torre
  * @date    24 sept 2026
  *
@@ -275,7 +275,7 @@ static void cmdExec(void)
 	state     = (lastError == CMD_OK) ? CMD_IDLE : CMD_ERROR;
 }
 
-/** @brief Estado CMD_ERROR: mensajes con el texto que pide la práctica 5. */
+/** @brief Estado CMD_ERROR: mensajes de error con el texto acordado. */
 static void cmdPrintError(void)
 {
 	switch (lastError) {

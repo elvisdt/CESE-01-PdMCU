@@ -1,6 +1,6 @@
 /**
  * @file    API_delay.c
- * @brief   Retardos no bloqueantes (práctica 3).
+ * @brief   Retardos no bloqueantes.
  * @author  Elvis de la Torre
  * @date    10 sept 2026
  */

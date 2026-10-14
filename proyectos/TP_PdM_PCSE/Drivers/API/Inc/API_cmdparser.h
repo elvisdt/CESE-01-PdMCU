@@ -1,10 +1,10 @@
 /**
  * @file    API_cmdparser.h
- * @brief   Intérprete de comandos por UART (práctica 5).
+ * @brief   Intérprete de comandos por UART.
  * @author  Elvis de la Torre
  * @date    24 sept 2026
  *
- * Es la MEF de cinco estados de la práctica 5, con una diferencia: los
+ * Es la MEF de cinco estados de las prácticas, con una diferencia: los
  * comandos no están fijos adentro del módulo. La aplicación le pasa una
  * tabla con el nombre de cada comando, cuántos argumentos acepta y qué
  * función lo atiende. Así el mismo parser sirve para la estación y para

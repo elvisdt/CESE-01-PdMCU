@@ -58,7 +58,7 @@ void appTestUpdate(void)
 /* -------------------------------------------------------------------------- */
 #elif APP_TEST == TEST_UART
 
-/* Los comandos de la práctica 5, ahora sobre el parser con tabla. */
+/* Los comandos de las prácticas, ahora sobre el parser con tabla. */
 static cmdStatus_t cmdLed(uint8_t argc, char *argv[])
 {
 	(void)argc;
