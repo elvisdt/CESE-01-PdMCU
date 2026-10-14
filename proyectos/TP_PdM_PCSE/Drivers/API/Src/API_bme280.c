@@ -38,6 +38,7 @@
 #define CONFIG_VALUE      0xA0U    /* t_sb = 1000 ms, filtro off           */
 
 #define T_RESET_MS        3U
+#define T_FIRST_MEAS_MS   20U      /* conversión T+P+H x1: 9,3 ms máx (datasheet 9.1) */
 #define RESET_RETRIES     5U
 
 /* Coeficientes de calibración */
@@ -115,6 +116,10 @@ bme280Status_t bme280Init(void)
 	    !bme280PortWrite(REG_CTRL_MEAS, CTRL_MEAS_VALUE)) {
 		return BME280_ERR_PORT;
 	}
+
+	/* Hasta que termina la primera conversión los registros de dato valen
+	 * 0x80000, que bme280Read() toma como sensor reiniciado. */
+	bme280PortDelayMs(T_FIRST_MEAS_MS);
 
 	ready = true;
 	return BME280_OK;

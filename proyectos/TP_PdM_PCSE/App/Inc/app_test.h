@@ -29,17 +29,8 @@ extern "C" {
 #define TEST_ALARM      8   /* OK habilita/deshabilita, estado por UART       */
 
 #ifndef APP_TEST
-// #define APP_TEST        TEST_DELAY
-
-//#define APP_TEST TEST_I2C_SCAN
-//#define APP_TEST TEST_LCD
-#define APP_TEST TEST_BME280
-//#define APP_TEST TEST_ENCODER
-
+#define APP_TEST        TEST_NONE    /* cambiar acá para correr una prueba */
 #endif
-
-
-
 
 void appTestInit(void);
 void appTestUpdate(void);

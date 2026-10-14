@@ -37,6 +37,7 @@
 #define UI_SAMPLE_MS   1000U
 #define UI_RETRY_MS    2000U
 #define UI_RENDER_MS   200U
+#define UI_START_MS    500U    /* LCD encendido antes de arrancar el sensor */
 #define UI_LINE_LEN    (LCD_COLS + 1U)
 #define UI_MSG_LEN     96U
 
@@ -61,6 +62,8 @@ static uint8_t      noteTicks = 0;       /* refrescos que dura el mensaje */
 static delay_t dSample;
 static delay_t dRetry;
 static delay_t dRender;
+static delay_t dStart;
+static bool_t  lcdStarted = false;   /* UI_INIT: primero LCD, después sensor */
 
 static char msg[UI_MSG_LEN];
 
@@ -96,6 +99,8 @@ void uiInit(void)
 	delayInit(&dSample, UI_SAMPLE_MS);
 	delayInit(&dRetry, UI_RETRY_MS);
 	delayInit(&dRender, UI_RENDER_MS);
+	delayInit(&dStart, UI_START_MS);
+	lcdStarted = false;
 	state = UI_INIT;
 }
 
@@ -114,19 +119,32 @@ void uiUpdate(void)
 
 	switch (state) {
 	case UI_INIT:
-		if (!portI2cInit()) {
-			uartSendString((uint8_t *)"ERROR: bus I2C\r\n");
+		/* Paso 1: bus, encoder y LCD. Se muestra "Iniciando..." enseguida. */
+		if (!lcdStarted) {
+			if (!portI2cInit()) {
+				uartSendString((uint8_t *)"ERROR: bus I2C\r\n");
+			}
+			if (!encoderInit()) {
+				uartSendString((uint8_t *)"AVISO: encoder no inicializado\r\n");
+			}
+			lcdOk = (lcdInit() == LCD_OK);
+			uartSendString(lcdOk ? (uint8_t *)"LCD OK\r\n"
+			                     : (uint8_t *)"AVISO: LCD no responde, sigo solo por UART\r\n");
+			lcdStarted = true;
+			dirty      = true;
+			delayRead(&dStart);                  /* arranca la espera */
+			break;
 		}
-		if (!encoderInit()) {
-			uartSendString((uint8_t *)"AVISO: encoder no inicializado\r\n");
-		}
-		lcdOk = (lcdInit() == LCD_OK);
-		if (!lcdOk) {
-			uartSendString((uint8_t *)"AVISO: LCD no responde, sigo solo por UART\r\n");
+		/* Paso 2: pasado UI_START_MS, el sensor y la primera lectura */
+		if (!delayRead(&dStart)) {
+			break;
 		}
 		if (bme280Init() == BME280_OK) {
-			uiSample();
-			uiEnter(UI_SHOW);
+			uartSendString((uint8_t *)"BME280 OK\r\n");
+			uiSample();                          /* si falla ya pasa a UI_ERROR */
+			if (measValid) {
+				uiEnter(UI_SHOW);
+			}
 		} else {
 			uiEnter(UI_ERROR);
 		}
@@ -184,7 +202,9 @@ void uiUpdate(void)
 		if (delayRead(&dRetry)) {
 			if (bme280Init() == BME280_OK) {
 				uiSample();
-				uiEnter(UI_SHOW);
+				if (measValid) {                 /* vuelve solo con una lectura buena */
+					uiEnter(UI_SHOW);
+				}
 			}
 		}
 		break;
