@@ -38,7 +38,7 @@ Al encender aparece una pantalla de bienvenida y, a los 1,5 s, la principal:
 
 ```
 T:24.8°C H: 55%       temperatura y humedad
-P: 1007.1 hPa  🔔     presión y estado de la alarma
+P: 1007.1 hPa  X     presión y estado de la alarma
 ```
 
 La campana es un caracter propio cargado en el LCD: llena si la alarma está
