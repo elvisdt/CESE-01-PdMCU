@@ -81,9 +81,24 @@ void alarmToggle(void);
 
 /**
  * @brief  Cambia los límites de una variable.
- * @return false si min >= max o si quedan fuera de lo que mide el sensor.
+ * @return false si min >= max, si quedan fuera de lo que mide el sensor, o
+ *         si el rango es más angosto que dos histéresis.
  */
 bool_t alarmSetLimits(variable_t var, float min, float max);
+
+/**
+ * @brief  Cambia la histéresis de una variable.
+ *
+ * Se ofrece solo por consola: es un ajuste fino que no hace falta tocar
+ * desde los botones.
+ *
+ * @return false si es negativa, si supera el tope de esa variable, o si
+ *         dos histéresis no entran en el rango configurado.
+ */
+bool_t alarmSetHysteresis(variable_t var, float h);
+
+/** @brief Histéresis actual de una variable. */
+float alarmGetHysteresis(variable_t var);
 
 /** @brief Límites actuales de una variable. */
 limits_t alarmGetLimits(variable_t var);

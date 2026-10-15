@@ -22,6 +22,8 @@
 
 #define TEMP_HYST           0.3f   /**< unas décimas más que el ruido del sensor */
 #define HUM_HYST            2.0f   /**< la humedad fluctúa bastante más */
+#define TEMP_HYST_MAX       5.0f   /**< tope de la histéresis configurable */
+#define HUM_HYST_MAX       10.0f
 
 #define TEMP_DEFAULT_MIN   10.0f
 #define TEMP_DEFAULT_MAX   35.0f
@@ -32,14 +34,15 @@
 
 typedef struct {
 	limits_t sensor;   /**< rango del sensor: los límites no pueden salir de acá */
-	float    hyst;     /**< margen para salir de ACTIVE */
+	float    hyst;     /**< histéresis por defecto */
+	float    hystMax;  /**< mayor histéresis que se acepta por consola */
 } varSpec_t;
 
 /* Variables privadas --------------------------------------------------------*/
 
 static const varSpec_t spec[VAR_COUNT] = {
-	[VAR_TEMP] = { { TEMP_RANGE_MIN, TEMP_RANGE_MAX }, TEMP_HYST },
-	[VAR_HUM]  = { { HUM_RANGE_MIN,  HUM_RANGE_MAX  }, HUM_HYST  },
+	[VAR_TEMP] = { { TEMP_RANGE_MIN, TEMP_RANGE_MAX }, TEMP_HYST, TEMP_HYST_MAX },
+	[VAR_HUM]  = { { HUM_RANGE_MIN,  HUM_RANGE_MAX  }, HUM_HYST,  HUM_HYST_MAX  },
 };
 
 static const limits_t defaults[VAR_COUNT] = {
@@ -48,6 +51,7 @@ static const limits_t defaults[VAR_COUNT] = {
 };
 
 static limits_t     limits[VAR_COUNT];
+static float        hyst[VAR_COUNT];   /**< margen para salir de ACTIVE */
 static bool_t       outOfRange[VAR_COUNT];
 static alarmState_t state    = ALARM_DISABLED;
 static delay_t      buzzerTimer;
@@ -65,6 +69,7 @@ void alarmInit(void)
 {
 	for (uint8_t i = 0U; i < (uint8_t)VAR_COUNT; i++) {
 		limits[i]     = defaults[i];
+		hyst[i]       = spec[i].hyst;
 		outOfRange[i] = false;
 	}
 	state = ALARM_DISABLED;
@@ -83,7 +88,7 @@ void alarmUpdate(const bme280Data_t *data)
 
 	for (uint8_t i = 0U; i < (uint8_t)VAR_COUNT; i++) {
 		float x = varValue(data, (variable_t)i);
-		float h = spec[i].hyst;
+		float h = hyst[i];
 
 		outOfRange[i] = (x < limits[i].min) || (x > limits[i].max);
 		anyOut = anyOut || outOfRange[i];
@@ -163,6 +168,11 @@ bool_t alarmSetLimits(variable_t var, float min, float max)
 	if (!(min < max) || min < spec[var].sensor.min || max > spec[var].sensor.max) {
 		return false;
 	}
+	/* Con un rango más angosto que dos histéresis la alarma no podría salir
+	 * nunca de ACTIVE: no habría valor que quede "dentro con margen". */
+	if ((max - min) <= 2.0f * hyst[var]) {
+		return false;
+	}
 	limits[var].min = min;
 	limits[var].max = max;
 	return true;
@@ -172,6 +182,24 @@ limits_t alarmGetLimits(variable_t var)
 {
 	static const limits_t none = { 0.0f, 0.0f };
 	return (var < VAR_COUNT) ? limits[var] : none;
+}
+
+bool_t alarmSetHysteresis(variable_t var, float h)
+{
+	if (var >= VAR_COUNT) {
+		return false;
+	}
+	if (h < 0.0f || h > spec[var].hystMax ||
+	    (limits[var].max - limits[var].min) <= 2.0f * h) {
+		return false;
+	}
+	hyst[var] = h;
+	return true;
+}
+
+float alarmGetHysteresis(variable_t var)
+{
+	return (var < VAR_COUNT) ? hyst[var] : 0.0f;
 }
 
 limits_t alarmGetRange(variable_t var)

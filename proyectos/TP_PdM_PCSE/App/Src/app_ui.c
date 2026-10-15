@@ -112,13 +112,35 @@ static float       uiClamp(float x, float lo, float hi);
 static cmdStatus_t cmdGet(uint8_t argc, char *argv[]);
 static cmdStatus_t cmdLim(uint8_t argc, char *argv[]);
 static cmdStatus_t cmdSet(uint8_t argc, char *argv[]);
+static cmdStatus_t cmdHyst(uint8_t argc, char *argv[]);
+static cmdStatus_t cmdHyst(uint8_t argc, char *argv[])
+{
+	float h;
+	(void)argc;
+
+	if (argv[1][1] != '\0') {
+		return CMD_ERR_ARG;
+	}
+	for (uint8_t i = 0U; i < (uint8_t)VAR_COUNT; i++) {
+		if (argv[1][0] == varLetter[i]) {
+			if (!cmdParseFloat(argv[2], &h) || !alarmSetHysteresis((variable_t)i, h)) {
+				return CMD_ERR_ARG;
+			}
+			uiPrint("OK\r\n");
+			return CMD_OK;
+		}
+	}
+	return CMD_ERR_ARG;
+}
+
 static cmdStatus_t cmdAlarm(uint8_t argc, char *argv[]);
 static cmdStatus_t cmdStatus(uint8_t argc, char *argv[]);
 
 static const cmdEntry_t uiCommands[] = {
 	{ "GET",    0U, 0U, cmdGet,    "GET                  mediciones actuales" },
-	{ "LIM?",   0U, 0U, cmdLim,    "LIM?                 limites de alarma (T y H)" },
+	{ "LIM?",   0U, 0U, cmdLim,    "LIM?                 limites e histeresis (T y H)" },
 	{ "SET",    3U, 3U, cmdSet,    "SET <T|H> <min> <max>" },
+	{ "HYST",   2U, 2U, cmdHyst,   "HYST <T|H> <valor>   histeresis de la alarma" },
 	{ "ALARM",  1U, 1U, cmdAlarm,  "ALARM <ON|OFF>" },
 	{ "STATUS", 0U, 0U, cmdStatus, "STATUS               estado de la MEF y la alarma" },
 };
@@ -527,6 +549,7 @@ static cmdStatus_t cmdLim(uint8_t argc, char *argv[])
 {
 	char a[FMT_FLOAT1_LEN];
 	char b[FMT_FLOAT1_LEN];
+	char h[FMT_FLOAT1_LEN];
 	(void)argc;
 	(void)argv;
 
@@ -534,7 +557,9 @@ static cmdStatus_t cmdLim(uint8_t argc, char *argv[])
 		limits_t l = alarmGetLimits((variable_t)i);
 		fmtFloat1(a, sizeof(a), l.min);
 		fmtFloat1(b, sizeof(b), l.max);
-		(void)snprintf(msg, sizeof(msg), "%c: %s .. %s %s\r\n", varLetter[i], a, b, varUnit[i]);
+		fmtFloat1(h, sizeof(h), alarmGetHysteresis((variable_t)i));
+		(void)snprintf(msg, sizeof(msg), "%c: %s .. %s %s  (histeresis %s)\r\n",
+		               varLetter[i], a, b, varUnit[i], h);
 		uiPrint(msg);
 	}
 	return CMD_OK;

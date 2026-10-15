@@ -61,8 +61,9 @@ La consola atiende estos comandos:
 | Comando | Qué hace |
 |---|---|
 | `GET` | muestra las tres mediciones |
-| `LIM?` | muestra los límites de temperatura y humedad |
+| `LIM?` | muestra los límites y la histéresis de temperatura y humedad |
 | `SET <T\|H> <min> <max>` | cambia los límites, por ejemplo `SET T 18 30` |
+| `HYST <T\|H> <valor>` | cambia la histéresis, por ejemplo `HYST T 0.5` |
 | `ALARM <ON\|OFF>` | habilita o deshabilita la alarma |
 | `STATUS` | estado de la interfaz y de la alarma |
 | `HELP` | lista los comandos |
@@ -131,7 +132,7 @@ queda encendido y el buzzer suena intermitente; en los otros dos, todo apagado.
 | `ALARM_ACTIVE` | se perdió el sensor | `ALARM_ARMED` |
 | `ALARM_ACTIVE` | SW o `ALARM OFF` | `ALARM_DISABLED` |
 
-La histéresis (0,3 °C y 2 %HR) evita que una medición que oscila justo en el
+La histéresis (por defecto 0,3 °C y 2 %HR, ajustable por consola con `HYST`) evita que una medición que oscila justo en el
 límite haga sonar y callar el buzzer cada segundo. Con el sensor perdido la
 alarma se calla porque no hay dato para afirmar que siga fuera de rango.
 
